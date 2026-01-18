@@ -79,7 +79,6 @@ function defaultConfig() {
       }
     ],
     routing: {
-      defaultProviderId: "",
       rules: {
         "/get-models": { mode: "byok" },
         "/chat": { mode: "byok" },
@@ -230,8 +229,6 @@ function normalizeConfig(raw) {
   }
 
   const routing = get(raw, ["routing"]);
-  const defaultProviderId = normalizeString(get(routing, ["default_provider_id", "defaultProviderId"]));
-  if (defaultProviderId) out.routing.defaultProviderId = defaultProviderId;
 
   const rules = get(routing, ["rules"]);
   if (rules && typeof rules === "object" && !Array.isArray(rules)) {

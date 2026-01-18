@@ -1020,14 +1020,14 @@ async function maybeHandleCallApi({ endpoint, body, transform, timeoutMs, abortS
 
   const t = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0 ? Number(timeoutMs) : DEFAULT_UPSTREAM_TIMEOUT_MS;
 
-  if (ep === "/get-models") {
-    const byokModels = buildByokModelsFromConfig(cfg);
-    const byokDefaultModel = byokModels.length ? byokModels[0] : "";
-    const activeProviderId = normalizeString(cfg?.routing?.defaultProviderId) || normalizeString(cfg?.providers?.[0]?.id);
-    const activeProvider = Array.isArray(cfg?.providers) ? cfg.providers.find((p) => p && normalizeString(p.id) === activeProviderId) : null;
-    const activeProviderDefaultModel = normalizeString(activeProvider?.defaultModel) || normalizeString(activeProvider?.models?.[0]);
-    const preferredByok = activeProviderId && activeProviderDefaultModel ? `byok:${activeProviderId}:${activeProviderDefaultModel}` : "";
-    const preferredDefaultModel = byokModels.includes(preferredByok) ? preferredByok : byokDefaultModel;
+	  if (ep === "/get-models") {
+	    const byokModels = buildByokModelsFromConfig(cfg);
+	    const byokDefaultModel = byokModels.length ? byokModels[0] : "";
+	    const activeProvider = Array.isArray(cfg?.providers) ? cfg.providers[0] : null;
+	    const activeProviderId = normalizeString(activeProvider?.id);
+	    const activeProviderDefaultModel = normalizeString(activeProvider?.defaultModel) || normalizeString(activeProvider?.models?.[0]);
+	    const preferredByok = activeProviderId && activeProviderDefaultModel ? `byok:${activeProviderId}:${activeProviderDefaultModel}` : "";
+	    const preferredDefaultModel = byokModels.includes(preferredByok) ? preferredByok : byokDefaultModel;
     try {
       const off = getOfficialConnection();
       const completionURL = normalizeString(upstreamCompletionURL) || off.completionURL;

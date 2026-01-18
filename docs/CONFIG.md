@@ -22,7 +22,7 @@
   - `id`：provider 标识（`byok:<providerId>:...`）
   - `type`：`openai_compatible` | `openai_responses` | `anthropic` | `gemini_ai_studio`
   - `baseUrl`、`apiKey`（可空，若 `headers` 已含鉴权）、`headers`、`models`、`defaultModel`、`requestDefaults`
-- `routing`：`defaultProviderId`、`rules[endpoint]`（`mode=official|byok|disabled`）
+- `routing`：`rules[endpoint]`（`mode=official|byok|disabled`；provider 留空时默认使用 `providers[0]`）
 - `historySummary`：面板只暴露 `enabled` + `model`；其它字段默认/保留
 - `telemetry.disabledEndpoints`：legacy（会迁移到 `routing.rules[*].mode=disabled`）
 

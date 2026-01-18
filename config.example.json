@@ -47,7 +47,6 @@
     }
   ],
   "routing": {
-    "defaultProviderId": "",
     "rules": {
       "/get-models": { "mode": "byok" },
       "/chat": { "mode": "byok" },
