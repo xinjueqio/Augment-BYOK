@@ -18,5 +18,9 @@
 fail-fast（直接阻断构建）：
 - patch needle 缺失（避免 silent break）
 - 命中 `autoAuth` 字符串
-- BYOK 合约检查失败（`tools/check/byok-contracts.js`）
+- BYOK 合约检查失败（`tools/check/byok-contracts/main.js`）
 - LLM 端点集合变化（需人工确认并更新 allowlist）
+- provider types 生成结果未提交（docs/UI）
+
+构建效率：
+- workflow 先 `upstream-analyze` 下载上游 VSIX，再 `build-vsix --skip-download` 复用缓存（避免重复下载）。

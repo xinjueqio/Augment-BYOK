@@ -6,6 +6,27 @@ function normalizeString(v) {
   return s ? s : "";
 }
 
+function normalizeStringList(raw, { maxItems } = {}) {
+  const lim = Number.isFinite(Number(maxItems)) && Number(maxItems) > 0 ? Math.floor(Number(maxItems)) : 200;
+  const out = [];
+  const seen = new Set();
+  const list = Array.isArray(raw) ? raw : [];
+  for (const v of list) {
+    const s = typeof v === "string" ? normalizeString(v) : "";
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+    if (out.length >= lim) break;
+  }
+  return out;
+}
+
+function hasAuthHeader(headers) {
+  const h = headers && typeof headers === "object" && !Array.isArray(headers) ? headers : {};
+  const keys = Object.keys(h).map((k) => String(k || "").trim().toLowerCase());
+  return keys.some((k) => k === "authorization" || k === "x-api-key" || k === "api-key" || k === "x-goog-api-key");
+}
+
 function requireString(v, label) {
   const s = normalizeString(v);
   if (!s) throw new Error(`${label} 未配置`);
@@ -105,6 +126,8 @@ function randomId() {
 
 module.exports = {
   normalizeString,
+  normalizeStringList,
+  hasAuthHeader,
   requireString,
   normalizeEndpoint,
   normalizeRawToken,

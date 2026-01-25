@@ -1,26 +1,14 @@
 #!/usr/bin/env node
 "use strict";
 
-const crypto = require("crypto");
-const fs = require("fs");
 const path = require("path");
 
-const { ensureDir, rmDir, copyDir, readJson, writeJson } = require("../lib/fs");
+const { getArgValue, hasFlag } = require("../lib/cli-args");
+const { sha256FileHex } = require("../lib/hash");
+const { ensureDir, rmDir, readJson, writeJson } = require("../lib/fs");
 const { run } = require("../lib/run");
-const { downloadFile } = require("../lib/http");
-
-const { patchAugmentInterceptorInject } = require("../patch/patch-augment-interceptor-inject");
-const { patchExtensionEntry } = require("../patch/patch-extension-entry");
-const { patchOfficialOverrides } = require("../patch/patch-official-overrides");
-const { patchCallApiShim } = require("../patch/patch-callapi-shim");
-const { patchExposeUpstream } = require("../patch/patch-expose-upstream");
-const { patchPackageJsonCommands } = require("../patch/patch-package-json-commands");
-const { guardNoAutoAuth } = require("../patch/guard-no-autoauth");
-
-function sha256FileHex(filePath) {
-  const buf = fs.readFileSync(filePath);
-  return crypto.createHash("sha256").update(buf).digest("hex");
-}
+const { applyByokPatches, runByokContractChecks } = require("../lib/byok-workflow");
+const { DEFAULT_UPSTREAM_VSIX_URL, DEFAULT_UPSTREAM_VSIX_REL_PATH, ensureUpstreamVsix, unpackVsixToWorkDir } = require("../lib/upstream-vsix");
 
 async function main() {
   const repoRoot = path.resolve(__dirname, "../..");
@@ -28,77 +16,37 @@ async function main() {
   const distDir = path.join(repoRoot, "dist");
   ensureDir(distDir);
 
-  const upstreamUrl =
-    "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/augment/vsextensions/vscode-augment/latest/vspackage";
-  const upstreamVsixPath = path.join(cacheDir, "upstream", "augment.vscode-augment.latest.vsix");
+  const upstreamUrl = DEFAULT_UPSTREAM_VSIX_URL;
+  const upstreamVsixPath = path.resolve(repoRoot, getArgValue(process.argv, "--upstream-vsix") || DEFAULT_UPSTREAM_VSIX_REL_PATH);
+  const skipDownload = hasFlag(process.argv, "--skip-download") || process.env.AUGMENT_BYOK_SKIP_UPSTREAM_DOWNLOAD === "1";
 
-  console.log(`[build] download upstream VSIX`);
-  await downloadFile(upstreamUrl, upstreamVsixPath);
+  if (skipDownload) {
+    console.log(`[build] reuse cached upstream VSIX: ${path.relative(repoRoot, upstreamVsixPath)}`);
+  } else {
+    console.log(`[build] download upstream VSIX`);
+  }
+  await ensureUpstreamVsix({ upstreamUrl, vsixPath: upstreamVsixPath, skipDownload });
   const upstreamSha = sha256FileHex(upstreamVsixPath);
 
   const workDir = path.join(cacheDir, "work", "latest");
-  rmDir(workDir);
-  ensureDir(workDir);
-
   console.log(`[build] unpack VSIX -> ${path.relative(repoRoot, workDir)}`);
-  run("python3", [path.join(repoRoot, "tools", "lib", "unzip-dir.py"), "--in", upstreamVsixPath, "--out", workDir], { cwd: repoRoot });
-
-  const extensionDir = path.join(workDir, "extension");
-  const pkgPath = path.join(extensionDir, "package.json");
-  const extJsPath = path.join(extensionDir, "out", "extension.js");
-  if (!fs.existsSync(pkgPath)) throw new Error(`missing unpacked file: ${path.relative(repoRoot, pkgPath)}`);
-  if (!fs.existsSync(extJsPath)) throw new Error(`missing unpacked file: ${path.relative(repoRoot, extJsPath)}`);
+  const { extensionDir, pkgPath, extJsPath } = unpackVsixToWorkDir({ repoRoot, vsixPath: upstreamVsixPath, workDir, clean: true });
 
   const upstreamPkg = readJson(pkgPath);
   const upstreamVersion = typeof upstreamPkg?.version === "string" ? upstreamPkg.version : "unknown";
 
-  console.log(`[build] overlay payload (extension/out/byok/*)`);
-  const payloadDir = path.join(repoRoot, "payload", "extension");
-  if (!fs.existsSync(payloadDir)) throw new Error(`payload missing: ${path.relative(repoRoot, payloadDir)}`);
-  copyDir(payloadDir, extensionDir);
-
-  console.log(`[build] patch package.json (commands)`);
-  patchPackageJsonCommands(pkgPath);
-
-  console.log(`[build] inject augment interceptor`);
   const interceptorInjectPath = path.join(repoRoot, "vendor", "augment-interceptor", "inject-code.augment-interceptor.v1.2.txt");
   const interceptorInjectSha = sha256FileHex(interceptorInjectPath);
-  patchAugmentInterceptorInject(extJsPath, {
-    injectPath: interceptorInjectPath
+  applyByokPatches({
+    repoRoot,
+    extensionDir,
+    pkgPath,
+    extJsPath,
+    interceptorInjectPath,
+    logPrefix: "build"
   });
 
-  console.log(`[build] patch entry bootstrap`);
-  patchExtensionEntry(extJsPath);
-
-  console.log(`[build] expose upstream internals (toolsModel)`);
-  patchExposeUpstream(extJsPath);
-
-  console.log(`[build] patch official (completionURL/apiToken from globalState config)`);
-  patchOfficialOverrides(extJsPath);
-
-  console.log(`[build] patch callApi/callApiStream shim`);
-  patchCallApiShim(extJsPath);
-
-  console.log(`[build] guard: no autoAuth`);
-  guardNoAutoAuth(extJsPath);
-
-  console.log(`[build] sanity check (node --check out/extension.js)`);
-  run("node", ["--check", extJsPath], { cwd: repoRoot });
-
-  console.log(`[build] contract checks`);
-  run(
-    "node",
-    [
-      path.join(repoRoot, "tools", "check", "byok-contracts.js"),
-      "--extensionDir",
-      extensionDir,
-      "--extJs",
-      extJsPath,
-      "--pkg",
-      pkgPath
-    ],
-    { cwd: repoRoot }
-  );
+  runByokContractChecks({ repoRoot, extensionDir, extJsPath, pkgPath, logPrefix: "build" });
 
   const outName = `augment.vscode-augment.${upstreamVersion}.byok.vsix`;
   const outPath = path.join(distDir, outName);

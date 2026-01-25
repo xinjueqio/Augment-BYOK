@@ -46,5 +46,4 @@ async function* traceAsyncGenerator(label, src) {
   }
 }
 
-module.exports = { nowMs, withTiming, traceAsyncGenerator };
-
+module.exports = { nowMs, formatMs, withTiming, traceAsyncGenerator };

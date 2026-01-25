@@ -187,7 +187,6 @@ async function fetchOkWithRetry(url, init, opts) {
 }
 
 module.exports = {
-  DEFAULT_RETRYABLE_HTTP_STATUSES,
   fetchWithRetry,
   fetchOkWithRetry,
   extractErrorMessageFromJson,

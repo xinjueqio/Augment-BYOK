@@ -131,7 +131,6 @@ module.exports = {
   fmtCodeSection,
   fmtJsonSection,
   historyToMessages,
-  pickText,
   pickMessageText,
   extractDirectives,
   buildSystem,

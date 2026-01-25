@@ -26,11 +26,29 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Check generated LLM endpoints (docs/UI)
+        run: node tools/gen/sync-llm-endpoints.js --check
+
+      - name: Check generated provider types (docs/UI)
+        run: node tools/gen/sync-provider-types.js --check
+
+      - name: Provider type dispatch check
+        run: node tools/check/provider-type-dispatch.js
+
+      - name: Syntax check (payload + tools)
+        run: node tools/check/node-check-js.js
+
+      - name: CODESTYLE check (max lines)
+        run: node tools/check/codestyle.js
+
+      - name: Unit tests
+        run: npm test
+
       - name: Upstream analyze
         run: node tools/build/upstream-analyze.js
 
       - name: Build VSIX
-        run: node tools/build/build-vsix.js
+        run: node tools/build/build-vsix.js --skip-download
 
       - name: Endpoint coverage (LLM fail-fast)
         run: node tools/report/endpoint-coverage.js --analysis .cache/reports/upstream-analysis.json --out dist/endpoint-coverage.report.md --fail-fast

@@ -115,7 +115,6 @@ function stripAnthropicImageBlocksFromMessages(messages, opts) {
 
 module.exports = {
   normalizeAnthropicBlocks,
-  stringifyAnthropicToolResultContent,
   buildOrphanAnthropicToolResultAsTextBlock,
   stripAnthropicToolBlocksFromMessages,
   stripAnthropicImageBlocksFromMessages

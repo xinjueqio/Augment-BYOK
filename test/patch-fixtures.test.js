@@ -1,0 +1,294 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const { guardNoAutoAuth } = require("../tools/patch/guard-no-autoauth");
+const { patchAugmentInterceptorInject } = require("../tools/patch/patch-augment-interceptor-inject");
+const { patchCallApiShim } = require("../tools/patch/patch-callapi-shim");
+const { patchExposeUpstream } = require("../tools/patch/patch-expose-upstream");
+const { patchExtensionEntry } = require("../tools/patch/patch-extension-entry");
+const { patchOfficialOverrides } = require("../tools/patch/patch-official-overrides");
+const { patchPackageJsonCommands } = require("../tools/patch/patch-package-json-commands");
+
+function withTempDir(prefix, fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  try {
+    return fn(dir);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function readUtf8(filePath) {
+  return fs.readFileSync(filePath, "utf8");
+}
+
+function writeUtf8(filePath, content) {
+  fs.writeFileSync(filePath, content, "utf8");
+}
+
+test("guardNoAutoAuth: passes when /autoAuth absent", () => {
+  withTempDir("augment-byok-guard-", (dir) => {
+    const filePath = path.join(dir, "extension.js");
+    writeUtf8(filePath, `console.log("ok");\n`);
+    assert.deepEqual(guardNoAutoAuth(filePath), { ok: true });
+  });
+});
+
+test("guardNoAutoAuth: fails fast when /autoAuth present", () => {
+  withTempDir("augment-byok-guard-", (dir) => {
+    const filePath = path.join(dir, "extension.js");
+    writeUtf8(filePath, `switch (x) { case "/autoAuth": break; }\n`);
+    assert.throws(() => guardNoAutoAuth(filePath), /autoAuth guard failed/i);
+  });
+});
+
+test("patchExtensionEntry: injects bootstrap and is idempotent", () => {
+  withTempDir("augment-byok-patch-", (dir) => {
+    const filePath = path.join(dir, "extension.js");
+    const src = [
+      `"use strict";`,
+      `let a=()=>{};`,
+      `const exportsObj={activate:()=>a};`,
+      `console.log(exportsObj);`,
+      `//# sourceMappingURL=extension.js.map`
+    ].join("\n");
+    writeUtf8(filePath, src);
+
+    const r1 = patchExtensionEntry(filePath);
+    assert.equal(r1.changed, true);
+    assert.equal(r1.activateVar, "a");
+
+    const out1 = readUtf8(filePath);
+    assert.ok(out1.includes(`require("./byok/runtime/bootstrap")`));
+    assert.ok(out1.includes("__augment_byok_bootstrap_injected_v1"));
+    assert.ok(out1.indexOf("__augment_byok_bootstrap_injected_v1") < out1.indexOf("\n//# sourceMappingURL="));
+
+    const r2 = patchExtensionEntry(filePath);
+    assert.equal(r2.changed, false);
+    const out2 = readUtf8(filePath);
+    assert.equal(out2, out1);
+  });
+});
+
+test("patchCallApiShim: injects callApi/callApiStream and is idempotent", () => {
+  withTempDir("augment-byok-patch-", (dir) => {
+    const filePath = path.join(dir, "extension.js");
+    const src = [
+      `class C{`,
+      `  async callApi(a,b,c,d,e,f,g,h,i,j,k){return {a,b,c,d,e,f,g,h,i,j,k};}`,
+      `  async callApiStream(a,b,c,d,e,f){return {a,b,c,d,e,f};}`,
+      `}`,
+      `exports.C=C;`
+    ].join("\n");
+    writeUtf8(filePath, src);
+
+    const r1 = patchCallApiShim(filePath);
+    assert.equal(r1.changed, true);
+    assert.equal(r1.callApiPatched, 1);
+    assert.equal(r1.callApiStreamPatched, 1);
+
+    const out1 = readUtf8(filePath);
+    assert.ok(out1.includes("__augment_byok_callapi_shim_patched_v1"));
+    assert.ok(out1.includes(`require("./byok/runtime/shim/call-api").maybeHandleCallApi`));
+    assert.ok(out1.includes(`require("./byok/runtime/shim/call-api-stream").maybeHandleCallApiStream`));
+
+    const r2 = patchCallApiShim(filePath);
+    assert.equal(r2.changed, false);
+    const out2 = readUtf8(filePath);
+    assert.equal(out2, out1);
+  });
+});
+
+test("patchExposeUpstream: captures AugmentExtension instance and is idempotent", () => {
+  withTempDir("augment-byok-patch-", (dir) => {
+    const filePath = path.join(dir, "extension.js");
+    const src = [
+      `const __exp={AugmentExtension:()=>D6,activate:()=>a};`,
+      `let a=()=>{};`,
+      `class D6{}`,
+      `let inst=new D6(1);`,
+      `console.log(__exp,inst);`
+    ].join("\n");
+    writeUtf8(filePath, src);
+
+    const r1 = patchExposeUpstream(filePath);
+    assert.equal(r1.changed, true);
+    assert.equal(r1.classIdent, "D6");
+    assert.equal(r1.varName, "inst");
+
+    const out1 = readUtf8(filePath);
+    assert.ok(out1.includes("__augment_byok_expose_upstream_v1"));
+    assert.ok(out1.includes("globalThis.__augment_byok_upstream.augmentExtension=inst;"));
+
+    const r2 = patchExposeUpstream(filePath);
+    assert.equal(r2.changed, false);
+    const out2 = readUtf8(filePath);
+    assert.equal(out2, out1);
+  });
+});
+
+test("patchAugmentInterceptorInject: prepends inject-code and is idempotent", () => {
+  withTempDir("augment-byok-patch-", (dir) => {
+    const filePath = path.join(dir, "extension.js");
+    writeUtf8(filePath, `console.log("upstream");\n`);
+
+    const injectPath = path.join(dir, "inject.txt");
+    const injectCode = [
+      `/* Augment Interceptor Injection Start */`,
+      `console.log("inject");`,
+      `/* Augment Interceptor Injection End */`
+    ].join("\n");
+    writeUtf8(injectPath, injectCode);
+
+    const r1 = patchAugmentInterceptorInject(filePath, { injectPath });
+    assert.equal(r1.changed, true);
+
+    const out1 = readUtf8(filePath);
+    assert.ok(out1.startsWith(injectCode));
+    assert.ok(out1.includes("__augment_byok_augment_interceptor_injected_v1"));
+
+    const r2 = patchAugmentInterceptorInject(filePath, { injectPath });
+    assert.equal(r2.changed, false);
+    const out2 = readUtf8(filePath);
+    assert.equal(out2, out1);
+  });
+});
+
+test("patchPackageJsonCommands: adds BYOK commands, strips augment.advanced.*, and is idempotent", () => {
+  withTempDir("augment-byok-patch-", (dir) => {
+    const filePath = path.join(dir, "package.json");
+    writeUtf8(
+      filePath,
+      JSON.stringify(
+        {
+          name: "x",
+          contributes: {
+            commands: [{ command: "existing.cmd", title: "Existing" }],
+            configuration: {
+              properties: {
+                "augment.advanced.apiToken": { type: "string" },
+                "augment.advanced.completionURL": { type: "string" },
+                "augment.advanced.chat": { type: "string" },
+                "augment.advanced.codeEdits": { type: "string" },
+                "augment.advanced": {
+                  type: "object",
+                  properties: {
+                    apiToken: { type: "string" },
+                    completionURL: { type: "string" },
+                    chat: { type: "string" },
+                    codeEdits: { type: "string" },
+                    keep: { type: "string" }
+                  }
+                },
+                "other.setting": { type: "boolean" }
+              }
+            }
+          }
+        },
+        null,
+        2
+      ) + "\n"
+    );
+
+    patchPackageJsonCommands(filePath);
+
+    const pkg1 = JSON.parse(readUtf8(filePath));
+    const commands1 = (pkg1.contributes && pkg1.contributes.commands) || [];
+    const commandIds1 = new Set(commands1.map((c) => c.command));
+    assert.ok(commandIds1.has("augment-byok.enable"));
+    assert.ok(commandIds1.has("augment-byok.disable"));
+    assert.ok(commandIds1.has("augment-byok.reloadConfig"));
+    assert.ok(commandIds1.has("augment-byok.openConfigPanel"));
+    assert.ok(commandIds1.has("augment-byok.clearHistorySummaryCache"));
+
+    const props1 = pkg1.contributes.configuration.properties;
+    for (const k of Object.keys(props1)) {
+      assert.ok(!k.startsWith("augment.advanced."), `unexpected advanced setting key: ${k}`);
+    }
+    assert.ok(props1["augment.advanced"]);
+    assert.ok(props1["augment.advanced"].properties);
+    assert.ok(!Object.prototype.hasOwnProperty.call(props1["augment.advanced"].properties, "apiToken"));
+    assert.ok(!Object.prototype.hasOwnProperty.call(props1["augment.advanced"].properties, "completionURL"));
+    assert.ok(!Object.prototype.hasOwnProperty.call(props1["augment.advanced"].properties, "chat"));
+    assert.ok(!Object.prototype.hasOwnProperty.call(props1["augment.advanced"].properties, "codeEdits"));
+    assert.ok(Object.prototype.hasOwnProperty.call(props1["augment.advanced"].properties, "keep"));
+
+    patchPackageJsonCommands(filePath);
+    const pkg2 = JSON.parse(readUtf8(filePath));
+    const commands2 = (pkg2.contributes && pkg2.contributes.commands) || [];
+    const ids2 = commands2.map((c) => c.command);
+    assert.equal(new Set(ids2).size, ids2.length);
+  });
+});
+
+test("patchOfficialOverrides: applies expected replacements and is idempotent", () => {
+  withTempDir("augment-byok-patch-", (dir) => {
+    const filePath = path.join(dir, "extension.js");
+    const src = [
+      `class ClientAuth{`,
+      `  async getAPIToken(){return this.configListener.config.apiToken}`,
+      `  async getCompletionURL(){return this.configListener.config.completionURL}`,
+      `}`,
+      ``,
+      `function normalizeConfigListener(t){`,
+      `  return {apiToken:(t?.advanced?.apiToken??t.apiToken??"").trim().toUpperCase(),completionURL:(t?.advanced?.completionURL??t.completionURL??"").trim()}`,
+      `}`,
+      ``,
+      `class ApiClient{`,
+      `  async makeAuthenticatedCall(t,r,n,i="POST",o){`,
+      `    const a="https://example.com/";`,
+      `    const l=new URL(t,a)`,
+      `    const d={status:500,statusText:"ERR"}`,
+      "    throw new st(`API call failed: ${d.statusText}`,Xe.Internal)",
+      `  }`,
+      `  async makeAuthenticatedCallStream(t,r,n,i="post",o){`,
+      `    const c={tenantUrl:"https://example.com/"};`,
+      `    const u=new URL(t,c.tenantUrl)`,
+      `    const f={status:500,statusText:"ERR"}`,
+      "    throw new st(`API call failed: ${f.statusText}`,Xe.Internal)",
+      `    const h={status:500,statusText:"ERR"}`,
+      "    throw new st(`API call failed: ${h.statusText}`,Xe.Internal)",
+      `  }`,
+      `  async callApi(p0,p1,p2,p3,p4,baseUrl,p6,p7,p8,p9,apiToken){`,
+      `    return {baseUrl,apiToken};`,
+      `  }`,
+      `  async callApiStream(p0,p1,p2,p3,p4,u){`,
+      `    u=u??await this.clientAuth.getCompletionURL()`,
+      `    return {u};`,
+      `  }`,
+      `}`,
+      `exports.ApiClient=ApiClient;`
+    ].join("\n");
+    writeUtf8(filePath, src);
+
+    const r1 = patchOfficialOverrides(filePath);
+    assert.equal(r1.changed, true);
+    assert.equal(r1.callApiPatched, 1);
+    assert.equal(r1.callApiStreamPatched, 1);
+
+    const out1 = readUtf8(filePath);
+    assert.ok(out1.includes("__augment_byok_official_overrides_patched_v1"));
+
+    assert.ok(!out1.includes("return this.configListener.config.apiToken"));
+    assert.ok(!out1.includes("return this.configListener.config.completionURL"));
+
+    assert.ok(!out1.includes("new URL(t,a)"));
+    assert.ok(!out1.includes("new URL(t,c.tenantUrl)"));
+    assert.ok(out1.includes("t.slice(1)"));
+
+    assert.ok(out1.includes("API call failed: ${d.status} ${d.statusText}"));
+    assert.ok(out1.includes("API call failed: ${f.status} ${f.statusText}"));
+    assert.ok(out1.includes("API call failed: ${h.status} ${h.statusText}"));
+
+    assert.ok(!out1.includes("u=u??await this.clientAuth.getCompletionURL()"));
+    assert.ok(out1.includes("u=u||await this.clientAuth.getCompletionURL()"));
+
+    const r2 = patchOfficialOverrides(filePath);
+    assert.equal(r2.changed, false);
+    const out2 = readUtf8(filePath);
+    assert.equal(out2, out1);
+  });
+});

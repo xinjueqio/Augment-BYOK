@@ -9,8 +9,15 @@
 
 ## 13 个 LLM 数据面（BYOK 语义实现）
 
+<!-- BEGIN GENERATED: LLM_ENDPOINTS -->
 - `callApi`（6）：`/get-models`、`/chat`、`/completion`、`/chat-input-completion`、`/edit`、`/next_edit_loc`
 - `callApiStream`（7）：`/chat-stream`、`/prompt-enhancer`、`/instruction-stream`、`/smart-paste-stream`、`/next-edit-stream`、`/generate-commit-message-stream`、`/generate-conversation-title`
+<!-- END GENERATED: LLM_ENDPOINTS -->
+
+维护（单一真相）：
+- 修改 `tools/report/llm-endpoints-spec.js`
+- 同步生成：`npm run gen:llm-endpoints`（更新 `docs/ENDPOINTS.md` + `payload/extension/out/byok/ui/config-panel/webview/render/index.js` + `payload/extension/out/byok/config/default-config.js` 的默认 routing rules）
+- CI 校验：`npm run check:llm-endpoints`（未提交生成结果会失败）
 
 ## 其余 58 个端点（非 LLM，默认 official）
 

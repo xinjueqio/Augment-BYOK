@@ -72,4 +72,4 @@ async function safeFetch(url, init, { timeoutMs, abortSignal, label } = {}) {
   }
 }
 
-module.exports = { createAbortError, buildAbortSignal, joinBaseUrl, safeFetch };
+module.exports = { createAbortError, joinBaseUrl, safeFetch };

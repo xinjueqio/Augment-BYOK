@@ -6,7 +6,7 @@
 - guard：产物不含 `/autoAuth` / `handleAutoAuth` / `__augment_byok_autoauth_patched`
 - guard：injector marker 存在（`Augment Interceptor Injection Start/End`）
 - `node --check out/extension.js`
-- BYOK 合约检查（`tools/check/byok-contracts.js`）
+- BYOK 合约检查（`tools/check/byok-contracts/main.js`）
 
 ## 运行期（手动）
 

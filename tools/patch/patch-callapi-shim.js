@@ -33,8 +33,8 @@ function patchCallApiShim(filePath) {
   const original = fs.readFileSync(filePath, "utf8");
   if (original.includes(MARKER)) return { changed: false, reason: "already_patched" };
 
-  const callApiShimPath = "./byok/runtime/shim-call-api";
-  const callApiStreamShimPath = "./byok/runtime/shim-call-api-stream";
+  const callApiShimPath = "./byok/runtime/shim/call-api";
+  const callApiStreamShimPath = "./byok/runtime/shim/call-api-stream";
 
   const sanitizeBody =
     `const __byok_body=arguments[3];` +

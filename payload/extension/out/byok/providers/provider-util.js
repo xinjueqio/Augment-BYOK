@@ -3,9 +3,16 @@
 const { normalizeString } = require("../infra/util");
 const { readHttpErrorDetail } = require("./request-util");
 
+const INVALID_REQUEST_FALLBACK_STATUSES = new Set([400, 422]);
+
 function normalizeUsageInt(v) {
   const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+}
+
+function isInvalidRequestStatusForFallback(status) {
+  const s = Number(status);
+  return Number.isFinite(s) && INVALID_REQUEST_FALLBACK_STATUSES.has(s);
 }
 
 function makeToolMetaGetter(toolMetaByName) {
@@ -26,4 +33,4 @@ async function assertSseResponse(resp, { label, expectedHint, previewChars } = {
   throw new Error(`${normalizeString(label) || "SSE"} 响应不是 SSE（content-type=${contentType || "unknown"}）${hint}；detail: ${detail}`.trim());
 }
 
-module.exports = { normalizeUsageInt, makeToolMetaGetter, assertSseResponse };
+module.exports = { normalizeUsageInt, isInvalidRequestStatusForFallback, makeToolMetaGetter, assertSseResponse };

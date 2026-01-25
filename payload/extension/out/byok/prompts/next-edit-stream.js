@@ -2,7 +2,7 @@
 
 const { normalizeString } = require("../infra/util");
 const { normalizeBlobsMap, coerceBlobText, pickBestBlobName, listBlobKeys } = require("../core/blob-utils");
-const { pickPath, pickLang, pickInstruction, pickBlobNameHint } = require("../core/next-edit-fields");
+const { pickPath, pickLang, pickInstruction, pickBlobNameHint } = require("../core/next-edit/fields");
 const { utf32ToUtf16Offset } = require("../core/unicode-utils");
 const { fmtSection, fmtCodeSection, fmtJsonSection, extractDirectives, buildSystem, extractCodeContext } = require("./common");
 

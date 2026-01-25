@@ -8,7 +8,6 @@ const CONFIG_SYNC_KEYS = [RUNTIME_ENABLED_KEY];
 const state = {
   installed: false,
   vscode: null,
-  extensionContext: null,
   runtimeEnabled: true,
   configManager: null,
   lastCapturedToolDefinitions: null,

@@ -1,6 +1,6 @@
 "use strict";
 
-const { normalizeString } = require("../infra/util");
+const { normalizeString, normalizeStringList } = require("../infra/util");
 const { commonSuffixLen } = require("./text-match");
 
 function looksLikeOfficialBlobsDiff(raw) {
@@ -23,21 +23,6 @@ function looksLikeOfficialBlobsDiff(raw) {
     if (!allowed.has(k)) return false;
   }
   return true;
-}
-
-function normalizeStringList(raw, { maxItems } = {}) {
-  const lim = Number.isFinite(Number(maxItems)) && Number(maxItems) > 0 ? Math.floor(Number(maxItems)) : 500;
-  const out = [];
-  const seen = new Set();
-  const list = Array.isArray(raw) ? raw : [];
-  for (const v of list) {
-    const s = normalizeString(String(v ?? ""));
-    if (!s || seen.has(s)) continue;
-    seen.add(s);
-    out.push(s);
-    if (out.length >= lim) break;
-  }
-  return out;
 }
 
 function normalizeOfficialBlobsDiff(raw) {

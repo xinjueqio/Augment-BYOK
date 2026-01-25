@@ -6,6 +6,18 @@
   "type": "commonjs",
   "scripts": {
     "build:vsix": "node tools/build/build-vsix.js",
+    "gen": "npm run gen:llm-endpoints && npm run gen:provider-types",
+    "gen:llm-endpoints": "node tools/gen/sync-llm-endpoints.js --write",
+    "gen:provider-types": "node tools/gen/sync-provider-types.js --write",
+    "check:fast": "npm run check:llm-endpoints && npm run check:provider-types && npm run check:provider-dispatch && npm run check:payload-syntax && npm run check:codestyle && npm test",
+    "check": "npm run check:fast && npm run check:contracts",
+    "check:llm-endpoints": "node tools/gen/sync-llm-endpoints.js --check",
+    "check:provider-types": "node tools/gen/sync-provider-types.js --check",
+    "check:provider-dispatch": "node tools/check/provider-type-dispatch.js",
+    "check:payload-syntax": "node tools/check/node-check-js.js",
+    "check:codestyle": "node tools/check/codestyle.js",
+    "check:contracts": "node tools/check/run-contracts-cached-upstream.js",
+    "test": "node --test test/*.test.js",
     "upstream:analyze": "node tools/build/upstream-analyze.js",
     "report:coverage": "node tools/report/endpoint-coverage.js --analysis .cache/reports/upstream-analysis.json --out dist/endpoint-coverage.report.md --fail-fast"
   }

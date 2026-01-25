@@ -1,16 +1,12 @@
 "use strict";
 
 const { debug } = require("../infra/log");
-const { nowMs } = require("../infra/trace");
-const { normalizeString, requireString, normalizeRawToken } = require("../infra/util");
+const { nowMs, formatMs } = require("../infra/trace");
+const { normalizeString, normalizeStringList, requireString, normalizeRawToken } = require("../infra/util");
 const { joinBaseUrl } = require("./http");
 const { openAiAuthHeaders, anthropicAuthHeaders } = require("./headers");
 const { fetchWithRetry, makeUpstreamHttpError } = require("./request-util");
-
-function formatMs(ms) {
-  const n = Number(ms);
-  return Number.isFinite(n) && n >= 0 ? `${Math.floor(n)}ms` : "n/a";
-}
+const { formatKnownProviderTypes } = require("../core/provider-types");
 
 function baseUrlForLog(baseUrl) {
   const b = normalizeString(baseUrl);
@@ -24,36 +20,26 @@ function baseUrlForLog(baseUrl) {
   }
 }
 
-function uniqKeepOrder(xs) {
-  const out = [];
-  const seen = new Set();
-  for (const it of Array.isArray(xs) ? xs : []) {
-    const s = normalizeString(it);
-    if (!s || seen.has(s)) continue;
-    seen.add(s);
-    out.push(s);
-  }
-  return out;
-}
-
 function parseModelIds(json) {
   if (!json || typeof json !== "object") return [];
 
+  const pickId = (m) => normalizeString(m?.id) || normalizeString(m?.name) || normalizeString(m?.model);
+
   const data = Array.isArray(json.data) ? json.data : null;
-  if (data) return uniqKeepOrder(data.map((m) => m?.id ?? m?.name ?? m?.model ?? ""));
+  if (data) return normalizeStringList(data.map(pickId), { maxItems: 5000 });
 
   const models = Array.isArray(json.models) ? json.models : null;
-  if (models) return uniqKeepOrder(models.map((m) => (typeof m === "string" ? m : m?.id ?? m?.name ?? m?.model ?? "")));
+  if (models) return normalizeStringList(models.map((m) => (typeof m === "string" ? m : pickId(m))), { maxItems: 5000 });
 
   const list = Array.isArray(json.model_ids) ? json.model_ids : Array.isArray(json.modelIds) ? json.modelIds : null;
-  if (list) return uniqKeepOrder(list);
+  if (list) return normalizeStringList(list, { maxItems: 5000 });
 
   return [];
 }
 
 async function fetchModelsWithFallback({ urls, headers, timeoutMs, abortSignal, label }) {
   const tried = [];
-  for (const url of uniqKeepOrder(urls)) {
+  for (const url of normalizeStringList(urls, { maxItems: 50 })) {
     tried.push(url);
     const resp = await fetchWithRetry(url, { method: "GET", headers }, { timeoutMs, abortSignal, label });
     if (!resp.ok) {
@@ -145,11 +131,10 @@ async function fetchProviderModels({ provider, timeoutMs, abortSignal }) {
   const t0 = nowMs();
   try {
     let models = [];
-    if (type === "openai_compatible") models = await fetchOpenAiCompatibleModels({ baseUrl, apiKey, extraHeaders, timeoutMs: t, abortSignal });
-    else if (type === "openai_responses") models = await fetchOpenAiCompatibleModels({ baseUrl, apiKey, extraHeaders, timeoutMs: t, abortSignal });
+    if (type === "openai_compatible" || type === "openai_responses") models = await fetchOpenAiCompatibleModels({ baseUrl, apiKey, extraHeaders, timeoutMs: t, abortSignal });
     else if (type === "anthropic") models = await fetchAnthropicModels({ baseUrl, apiKey, extraHeaders, timeoutMs: t, abortSignal });
     else if (type === "gemini_ai_studio") models = await fetchGeminiAiStudioModels({ baseUrl, apiKey, extraHeaders, timeoutMs: t, abortSignal });
-    else throw new Error(`未知 provider.type: ${type}`);
+    else throw new Error(`未知 provider.type: ${type}（支持：${formatKnownProviderTypes()}）`);
 
     debug(`[${label}] ok (${formatMs(nowMs() - t0)}) baseUrl=${baseUrlForLog(baseUrl)} models=${models.length}`);
     return models;

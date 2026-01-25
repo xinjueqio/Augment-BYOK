@@ -15,3 +15,11 @@
 - 使用：`../README.md` → `CONFIG.md`
 - 开发：`ARCH.md` → `CONFIG.md` → `ENDPOINTS.md`
 - 审查：`CI.md` → `ARCH.md` → `ENDPOINTS.md`
+
+本地常用命令：
+- `npm run check:fast`：快速静态检查 + 单测（不依赖上游缓存）
+- `npm run check`：完整检查（含合约；需先有 `.cache/upstream/*.vsix`，可运行 `npm run upstream:analyze`）
+- `npm run check:provider-dispatch`：强制 provider.type 分发收敛（避免 runtime/self-test/historySummary 漂移）
+- `npm run gen`：一键同步所有生成区块（ENDPOINTS/provider types 等）
+- `npm run gen:llm-endpoints`：同步 13 个 LLM 端点单一真相到 UI/文档（通常只在修改 spec 时需要）
+- `npm run gen:provider-types`：同步 provider.type 枚举单一真相到 UI/文档（通常只在修改 types 时需要）

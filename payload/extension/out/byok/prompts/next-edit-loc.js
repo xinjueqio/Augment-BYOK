@@ -2,14 +2,15 @@
 
 const { normalizeBlobsMap, coerceBlobText, pickBestBlobName, listBlobKeys } = require("../core/blob-utils");
 const { extractFirstDiagnosticPath, extractFirstDiagnosticLine } = require("../core/diagnostics-utils");
-const { pickPath, pickInstruction, pickNumResults, pickBlobNameHint } = require("../core/next-edit-fields");
+const { pickPath, pickInstruction, pickNumResults, pickBlobNameHint } = require("../core/next-edit/fields");
 const { clampInt } = require("../core/number-utils");
+const { normalizeNewlines } = require("../infra/text");
 const { fmtSection, fmtCodeSection, fmtJsonSection, extractDirectives, buildSystem } = require("./common");
 
 function formatLineWindow(text, { focusLine = 0, radius = 40, maxChars = 12000 } = {}) {
   const src = typeof text === "string" ? text : "";
   if (!src) return "";
-  const lines = src.replace(/\r\n/g, "\n").split("\n");
+  const lines = normalizeNewlines(src).split("\n");
   if (!lines.length) return "";
   const center = clampInt(focusLine, { min: 0, max: Math.max(0, lines.length - 1) });
   const r = clampInt(radius, { min: 0, max: 200 });

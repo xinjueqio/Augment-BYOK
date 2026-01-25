@@ -4,22 +4,9 @@
 const fs = require("fs");
 const path = require("path");
 
+const { getArgValue, getBooleanArg } = require("../lib/cli-args");
 const { readJson, writeText, ensureDir } = require("../lib/fs");
 const { LLM_ENDPOINT_SPECS } = require("./llm-endpoints-spec");
-
-function getArg(name) {
-  const idx = process.argv.indexOf(name);
-  if (idx < 0) return null;
-  return process.argv[idx + 1] || null;
-}
-
-function boolArg(name) {
-  const v = getArg(name);
-  if (v == null) return false;
-  if (v === "1" || v === "true" || v === "yes") return true;
-  if (v === "0" || v === "false" || v === "no") return false;
-  return Boolean(v);
-}
 
 function formatList(xs) {
   const arr = Array.isArray(xs) ? xs : [];
@@ -28,9 +15,9 @@ function formatList(xs) {
 
 function main() {
   const repoRoot = path.resolve(__dirname, "../..");
-  const analysisPath = path.resolve(repoRoot, getArg("--analysis") || ".cache/reports/upstream-analysis.json");
-  const outPath = path.resolve(repoRoot, getArg("--out") || "dist/endpoint-coverage.report.md");
-  const failFast = boolArg("--fail-fast");
+  const analysisPath = path.resolve(repoRoot, getArgValue(process.argv, "--analysis") || ".cache/reports/upstream-analysis.json");
+  const outPath = path.resolve(repoRoot, getArgValue(process.argv, "--out") || "dist/endpoint-coverage.report.md");
+  const failFast = getBooleanArg(process.argv, "--fail-fast");
 
   if (!fs.existsSync(analysisPath)) throw new Error(`missing analysis json: ${path.relative(repoRoot, analysisPath)}`);
   const analysis = readJson(analysisPath);
@@ -100,4 +87,3 @@ function main() {
 }
 
 main();
-

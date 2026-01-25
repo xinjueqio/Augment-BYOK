@@ -4,9 +4,9 @@
 const fs = require("fs");
 const path = require("path");
 
+const { getArgValue, hasFlag } = require("../lib/cli-args");
 const { ensureDir, rmDir, readJson, writeJson } = require("../lib/fs");
-const { run } = require("../lib/run");
-const { downloadFile } = require("../lib/http");
+const { DEFAULT_UPSTREAM_VSIX_URL, DEFAULT_UPSTREAM_VSIX_REL_PATH, ensureUpstreamVsix, unpackVsixToWorkDir } = require("../lib/upstream-vsix");
 
 function extractCallApiEndpoints(src) {
   const endpoints = new Map();
@@ -28,22 +28,20 @@ async function main() {
   const reportsDir = path.join(cacheDir, "reports");
   ensureDir(reportsDir);
 
-  const upstreamUrl =
-    "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/augment/vsextensions/vscode-augment/latest/vspackage";
-  const upstreamVsixPath = path.join(cacheDir, "upstream", "augment.vscode-augment.latest.vsix");
+  const upstreamUrl = DEFAULT_UPSTREAM_VSIX_URL;
+  const upstreamVsixPath = path.resolve(repoRoot, getArgValue(process.argv, "--upstream-vsix") || DEFAULT_UPSTREAM_VSIX_REL_PATH);
+  const skipDownload = hasFlag(process.argv, "--skip-download") || process.env.AUGMENT_BYOK_SKIP_UPSTREAM_DOWNLOAD === "1";
 
-  console.log(`[analyze] download upstream VSIX`);
-  await downloadFile(upstreamUrl, upstreamVsixPath);
+  if (skipDownload) {
+    console.log(`[analyze] reuse cached upstream VSIX: ${path.relative(repoRoot, upstreamVsixPath)}`);
+  } else {
+    console.log(`[analyze] download upstream VSIX`);
+  }
+  await ensureUpstreamVsix({ upstreamUrl, vsixPath: upstreamVsixPath, skipDownload });
 
   const workDir = path.join(cacheDir, "work", "upstream-analysis");
-  rmDir(workDir);
-  ensureDir(workDir);
-
   console.log(`[analyze] unpack VSIX`);
-  run("python3", [path.join(repoRoot, "tools", "lib", "unzip-dir.py"), "--in", upstreamVsixPath, "--out", workDir], { cwd: repoRoot });
-
-  const pkgPath = path.join(workDir, "extension", "package.json");
-  const extJsPath = path.join(workDir, "extension", "out", "extension.js");
+  const { pkgPath, extJsPath } = unpackVsixToWorkDir({ repoRoot, vsixPath: upstreamVsixPath, workDir, clean: true });
   const pkg = readJson(pkgPath);
   const upstreamVersion = typeof pkg?.version === "string" ? pkg.version : "unknown";
 

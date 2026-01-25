@@ -21,7 +21,8 @@ function redactText(v) {
   s = s.replace(/([?&](?:key|api_key|api-key|access_token|refresh_token)=)[^&\s]+/gi, "$1***");
   s = s.replace(/\bace_[A-Za-z0-9]{16,}\b/g, "ace_***");
   s = s.replace(/\bsk-ant-[A-Za-z0-9_-]{16,}\b/g, "sk-ant-***");
-  s = s.replace(/\bsk-[A-Za-z0-9]{16,}\b/g, "sk-***");
+  s = s.replace(/\bsk-proj-[A-Za-z0-9_-]{16,}\b/g, "sk-proj-***");
+  s = s.replace(/\bsk-[A-Za-z0-9_-]{16,}\b/g, "sk-***");
   return truncateForLog(s, MAX_LOG_STRING_BYTES);
 }
 
