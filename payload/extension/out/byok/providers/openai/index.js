@@ -139,7 +139,6 @@ async function* openAiChatStreamChunks({
 
   const toolCallsByIndex = new Map();
   let nodeId = 0;
-  let fullText = "";
   let thinkingBuf = "";
   let sawToolUse = false;
   let stopReason = null;
@@ -178,7 +177,6 @@ async function* openAiChatStreamChunks({
       const delta = c && typeof c === "object" ? c.delta : null;
       const text = typeof delta?.content === "string" ? delta.content : "";
       if (text) {
-        fullText += text;
         nodeId += 1;
         emittedChunks += 1;
         yield makeBackChatChunk({ text, nodes: [rawResponseNode({ id: nodeId, content: text })] });
@@ -258,7 +256,7 @@ async function* openAiChatStreamChunks({
   nodeId = usageBuilt.nodeId;
   if (usageBuilt.chunk) yield usageBuilt.chunk;
 
-  const final = buildFinalChatChunk({ nodeId, fullText, stopReasonSeen, stopReason, sawToolUse });
+  const final = buildFinalChatChunk({ nodeId, stopReasonSeen, stopReason, sawToolUse });
   yield final.chunk;
 }
 

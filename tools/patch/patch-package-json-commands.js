@@ -11,7 +11,9 @@ const COMMANDS = [
   { command: "augment-byok.disable", title: "BYOK: Disable (Rollback)" },
   { command: "augment-byok.reloadConfig", title: "BYOK: Reload Config" },
   { command: "augment-byok.openConfigPanel", title: "BYOK: Open Config Panel" },
-  { command: "augment-byok.clearHistorySummaryCache", title: "BYOK: Clear History Summary Cache" }
+  { command: "augment-byok.clearHistorySummaryCache", title: "BYOK: Clear History Summary Cache" },
+  { command: "augment-byok.importConfig", title: "BYOK: Import Config" },
+  { command: "augment-byok.exportConfig", title: "BYOK: Export Config" }
 ];
 
 function stripAdvancedSettings(contributes) {

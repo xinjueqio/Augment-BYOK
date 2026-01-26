@@ -9,19 +9,23 @@
 
 ## 配置
 
-- `BYOK: Open Config Panel`：填写 `official` + ≥1 个 `provider` → `Save`
+- `BYOK: Open Config Panel`：至少配置 1 个 `provider` → `Save`（Base URL 面板会按 type 自动填充默认值；`Official` token 可选：私有租户/官方上下文注入）
+- `Prompts`：可选，按 endpoint 追加 system prompt（仅影响 BYOK 上游模型；全局偏好用 Augment 的 User Guidelines；面板提供“一键填充（推荐）”模板）
 - `Self Test`：可选，一键验证 models / chat / chat-stream
 - 配置存 `globalState`（含 Key/Token）；字段/限制见 `docs/CONFIG.md`
 
 常用命令：
 - `BYOK: Enable` / `BYOK: Disable (Rollback)`
 - `BYOK: Reload Config`
+- `BYOK: Import Config` / `BYOK: Export Config`
 - `BYOK: Clear History Summary Cache`
 
 ## 排障（高频）
 
 - 401/403：检查 `apiKey`/`headers`；不要把 `Bearer ` 前缀重复写入（`apiKey` 会自动加 Bearer，`headers.authorization` 则应完整填写）。
 - 404/HTML：`baseUrl` 很可能少了 `/v1`（OpenAI/Anthropic 兼容端点通常要求）。
+- Anthropic stream 422 `system: invalid type: string`：多见于“Anthropic 兼容代理”实现差异；已内置自动重试（`system`/`messages[].content` 的 blocks 兼容兜底）。如仍失败请确认 `baseUrl` 指向 `/messages` 且代理支持 SSE。
+- 响应结束后末尾文字显示不全：已增强兜底（减少最终 chunk 体积 + /responses done/completed 补齐）；如仍复现请提供 provider.type/baseUrl/endpoint 方便定位。
 - 流式无输出：确认你的服务支持 `text/event-stream`；建议直接在面板跑 `Self Test` 定位（models / chat / chat-stream）。
 - BYOK 未生效：确认已 `Save`（热更新只影响后续请求）且 `BYOK: Enable`（runtimeEnabled=true）。
 

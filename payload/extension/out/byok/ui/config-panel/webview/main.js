@@ -13,9 +13,12 @@
       const initEl = qs("#byokInit");
       const initObj = initEl ? JSON.parse(initEl.textContent || "{}") : {};
       const cfg = initObj.config || {};
-      setUiState({ cfg, summary: initObj.summary || {}, status: "Ready.", clearOfficialToken: false, dirty: false }, { preserveEdits: false });
+      setUiState(
+        { cfg, runtimeEnabled: initObj.runtimeEnabled === true, status: "Ready.", clearOfficialToken: false, dirty: false },
+        { preserveEdits: false }
+      );
     } catch {
-      setUiState({ cfg: {}, summary: {}, status: "Init failed.", clearOfficialToken: false, dirty: false }, { preserveEdits: false });
+      setUiState({ cfg: {}, runtimeEnabled: false, status: "Init failed.", clearOfficialToken: false, dirty: false }, { preserveEdits: false });
     }
     postToExtension({ type: "init" });
   }

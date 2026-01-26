@@ -13,6 +13,19 @@
   ];
   ns.KNOWN_PROVIDER_TYPES = Object.freeze(KNOWN_PROVIDER_TYPES.slice());
 
+  const DEFAULT_BASE_URL_BY_PROVIDER_TYPE = {
+    openai_compatible: "https://api.openai.com/v1",
+    openai_responses: "https://api.openai.com/v1",
+    anthropic: "https://api.anthropic.com/v1",
+    gemini_ai_studio: "https://generativelanguage.googleapis.com/v1beta"
+  };
+  ns.DEFAULT_BASE_URL_BY_PROVIDER_TYPE = Object.freeze({ ...DEFAULT_BASE_URL_BY_PROVIDER_TYPE });
+
+  ns.defaultBaseUrlForProviderType = function defaultBaseUrlForProviderType(type) {
+    const t = ns.normalizeStr(type);
+    return t && Object.prototype.hasOwnProperty.call(DEFAULT_BASE_URL_BY_PROVIDER_TYPE, t) ? DEFAULT_BASE_URL_BY_PROVIDER_TYPE[t] : "";
+  };
+
   ns.qs = function qs(sel, root) {
     return (root || document).querySelector(sel);
   };
@@ -183,6 +196,14 @@
       if (id) out[id] = p;
     }
     return out;
+  };
+
+  ns.getEndpointCatalogV1 = function getEndpointCatalogV1() {
+    const groups = Array.isArray(ns.ENDPOINT_GROUPS_V1) ? ns.ENDPOINT_GROUPS_V1 : [];
+    const meanings = ns.ENDPOINT_MEANINGS_V1 && typeof ns.ENDPOINT_MEANINGS_V1 === "object" ? ns.ENDPOINT_MEANINGS_V1 : {};
+    const llmGroup = groups.find((g) => g && g.id === "llm_data_plane");
+    const llmEndpoints = Array.isArray(llmGroup?.endpoints) ? llmGroup.endpoints : [];
+    return { groups, meanings, llmEndpoints };
   };
 
   ns.nowMs = function nowMs() {

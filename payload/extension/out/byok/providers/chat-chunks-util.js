@@ -7,7 +7,6 @@ const {
   toolUseStartNode,
   toolUseNode,
   tokenUsageNode,
-  mainTextFinishedNode,
   makeBackChatChunk
 } = require("../core/augment-protocol");
 
@@ -90,20 +89,13 @@ function buildTokenUsageChunk({ nodeId, inputTokens, outputTokens, cacheReadInpu
   };
 }
 
-function buildFinalChatChunk({ nodeId, fullText, stopReasonSeen, stopReason, sawToolUse }) {
+function buildFinalChatChunk({ nodeId, stopReasonSeen, stopReason, sawToolUse }) {
   let nextId = Number(nodeId);
   if (!Number.isFinite(nextId) || nextId < 0) nextId = 0;
 
-  const finalNodes = [];
-  if (typeof fullText === "string" && fullText) {
-    nextId += 1;
-    finalNodes.push(mainTextFinishedNode({ id: nextId, content: fullText }));
-  }
-
   const stop_reason =
     stopReasonSeen && stopReason != null ? stopReason : sawToolUse ? STOP_REASON_TOOL_USE_REQUESTED : STOP_REASON_END_TURN;
-  return { nodeId: nextId, chunk: makeBackChatChunk({ text: "", nodes: finalNodes, stop_reason }) };
+  return { nodeId: nextId, chunk: makeBackChatChunk({ text: "", nodes: [], stop_reason }) };
 }
 
 module.exports = { buildToolUseChunks, buildTokenUsageChunk, buildFinalChatChunk };
-

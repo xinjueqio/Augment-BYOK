@@ -3,6 +3,7 @@
 const { debug, warn } = require("../../../infra/log");
 const { normalizeString } = require("../../../infra/util");
 const { captureAugmentToolDefinitions } = require("../../../config/state");
+const { resolveExtraSystemPrompt } = require("../../../config/prompts");
 const { maybeSummarizeAndCompactAugmentChatRequest } = require("../../../core/augment-history-summary/auto");
 const { normalizeAugmentChatRequest } = require("../../../core/augment-chat");
 const { maybeInjectOfficialCodebaseRetrieval } = require("../../official/codebase-retrieval");
@@ -113,6 +114,8 @@ async function buildByokAugmentChatContext({ kind, endpoint, cfg, provider, mode
 
   const { type, baseUrl, apiKey, extraHeaders, requestDefaults } = providerRequestContext(provider);
   const req = normalizeAugmentChatRequest(body);
+  const byokExtraSystem = resolveExtraSystemPrompt(cfg, ep);
+  if (byokExtraSystem) req.byok_system_prompt = byokExtraSystem;
   const conversationId = normalizeString(req?.conversation_id ?? req?.conversationId ?? req?.conversationID);
   const rid = normalizeString(requestId);
 

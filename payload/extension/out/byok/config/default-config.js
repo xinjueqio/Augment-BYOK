@@ -38,6 +38,9 @@ function defaultConfig() {
         numTerminalCommandsLimit: 10
       }
     },
+    prompts: {
+      endpointSystem: {}
+    },
     providers: [
       {
         id: "openai",

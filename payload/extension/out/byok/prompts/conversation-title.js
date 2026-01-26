@@ -2,7 +2,7 @@
 
 const { historyToMessages, extractDirectives, buildSystem } = require("./common");
 
-function buildConversationTitlePrompt(body) {
+function buildConversationTitlePrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const directives = extractDirectives(b);
   const history = historyToMessages(b.chat_history ?? b.chatHistory, { maxItems: 24 });
@@ -10,6 +10,7 @@ function buildConversationTitlePrompt(body) {
   const system = buildSystem({
     purpose: "generate-conversation-title",
     directives,
+    extraSystem,
     outputConstraints: "Generate a short, specific conversation title (<= 8 words). Output ONLY the title. Do NOT wrap in ``` code fences."
   });
 

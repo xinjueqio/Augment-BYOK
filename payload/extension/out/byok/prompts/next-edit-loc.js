@@ -27,7 +27,7 @@ function formatLineWindow(text, { focusLine = 0, radius = 40, maxChars = 12000 }
   return joined.slice(0, Math.max(0, maxChars - 14)) + "\n…(truncated)";
 }
 
-function buildNextEditLocPrompt(body) {
+function buildNextEditLocPrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const directives = extractDirectives(b);
 
@@ -53,6 +53,7 @@ function buildNextEditLocPrompt(body) {
   const system = buildSystem({
     purpose: "next_edit_loc",
     directives,
+    extraSystem,
     outputConstraints:
       "Return ONLY valid JSON (no markdown).\n" +
       "Schema:\n" +

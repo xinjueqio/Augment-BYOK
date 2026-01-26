@@ -2,6 +2,8 @@
 
 const { normalizeString } = require("../infra/util");
 
+const EMPTY_DIRECTIVES = Object.freeze({ userGuidelines: "", workspaceGuidelines: "", rulesText: "" });
+
 function truncate(text, maxChars) {
   const s = String(text ?? "");
   if (!Number.isFinite(Number(maxChars)) || Number(maxChars) <= 0) return s;
@@ -89,7 +91,7 @@ function extractDirectives(body) {
   return { userGuidelines, workspaceGuidelines, rulesText };
 }
 
-function buildSystem({ purpose, directives, outputConstraints }) {
+function buildSystem({ purpose, directives, outputConstraints, extraSystem }) {
   const p = normalizeString(purpose) || "assistant";
   const { userGuidelines, workspaceGuidelines, rulesText } = directives || {};
 
@@ -102,10 +104,17 @@ function buildSystem({ purpose, directives, outputConstraints }) {
   const g = [fmtSection("User Guidelines", userGuidelines), fmtSection("Workspace Guidelines", workspaceGuidelines), fmtSection("Rules", rulesText)].filter(Boolean).join("\n\n");
   if (g) parts.push("", g);
 
+  const extra = normalizeString(extraSystem);
+  if (extra) parts.push("", extra);
+
   const oc = normalizeString(outputConstraints);
   if (oc) parts.push("", oc);
 
   return parts.join("\n").trim();
+}
+
+function buildPurposeSystem({ purpose, outputConstraints, extraSystem } = {}) {
+  return buildSystem({ purpose, directives: EMPTY_DIRECTIVES, outputConstraints, extraSystem });
 }
 
 function extractCodeContext(body) {
@@ -134,5 +143,6 @@ module.exports = {
   pickMessageText,
   extractDirectives,
   buildSystem,
+  buildPurposeSystem,
   extractCodeContext
 };

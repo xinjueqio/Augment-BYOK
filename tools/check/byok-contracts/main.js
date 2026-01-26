@@ -99,6 +99,7 @@ function main(argv = process.argv) {
     "out/byok/providers/anthropic/json-util.js",
     "out/byok/providers/gemini/index.js",
     "out/byok/providers/gemini/json-util.js",
+    "out/byok/ui/config-io.js",
     "out/byok/ui/config-panel/index.js",
     "out/byok/ui/config-panel/html.js",
     "out/byok/ui/config-panel/style.css",
@@ -120,6 +121,9 @@ function main(argv = process.argv) {
   assertHasCommand(pkg, "augment-byok.disable");
   assertHasCommand(pkg, "augment-byok.reloadConfig");
   assertHasCommand(pkg, "augment-byok.openConfigPanel");
+  assertHasCommand(pkg, "augment-byok.clearHistorySummaryCache");
+  assertHasCommand(pkg, "augment-byok.importConfig");
+  assertHasCommand(pkg, "augment-byok.exportConfig");
   ok("package.json commands ok");
 
   const extJs = readText(extJsPath);

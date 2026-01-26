@@ -3,6 +3,7 @@
 const { info, warn } = require("../../infra/log");
 const { ensureConfigManager, state, setRuntimeEnabled, CONFIG_SYNC_KEYS, RUNTIME_ENABLED_KEY } = require("../../config/state");
 const { openConfigPanel } = require("../../ui/config-panel");
+const { exportConfigWithDialog, importConfigWithDialog, runIoWithUiErrorBoundary } = require("../../ui/config-io");
 const { clearHistorySummaryCacheAll, setHistorySummaryStorage } = require("../../core/augment-history-summary/auto");
 
 function install({ vscode, getActivate, setActivate }) {
@@ -105,6 +106,32 @@ function registerCommandsOnce(vscode, ctx, cfgMgr) {
       const m = err instanceof Error ? err.message : String(err);
       warn("clearHistorySummaryCache failed:", m);
       try { await vscode.window.showErrorMessage(`Clear history summary cache failed: ${m}`); } catch {}
+    }
+  });
+
+  register("augment-byok.exportConfig", async () => {
+    try {
+      await runIoWithUiErrorBoundary(async () => {
+        const r = await exportConfigWithDialog({ vscode, cfg: cfgMgr.get(), defaultFileName: "augment-byok.config.json" });
+        if (!r.ok) return;
+        try { await vscode.window.showInformationMessage(`BYOK config exported: ${String(r.uri)}`); } catch {}
+      });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      try { await vscode.window.showErrorMessage(`Export BYOK config failed: ${m}`); } catch {}
+    }
+  });
+
+  register("augment-byok.importConfig", async () => {
+    try {
+      await runIoWithUiErrorBoundary(async () => {
+        const r = await importConfigWithDialog({ vscode, cfgMgr, requireConfirm: true, preserveSecretsByDefault: true });
+        if (!r.ok) return;
+        try { await vscode.window.showInformationMessage(`BYOK config imported: ${String(r.uri)}`); } catch {}
+      });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      try { await vscode.window.showErrorMessage(`Import BYOK config failed: ${m}`); } catch {}
     }
   });
 }

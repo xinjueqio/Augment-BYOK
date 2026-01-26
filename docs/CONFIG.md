@@ -1,55 +1,139 @@
-# CONFIG
+# CONFIG（v1）
 
-单一真相：`globalState` 里的 `augment-byok.config.v1`（配置面板手填；无 JSON Import/Export）。
+单一真相：VS Code extension `globalState` 的 `augment-byok.config.v1`（可通过面板编辑；支持 JSON 导入/导出）。
+
+## 快速开始（面板）
+
+1) 运行 `BYOK: Open Config Panel`  
+2) 填 `Official`：`completionUrl`（默认官方）+ `apiToken`（可选：私有租户 / 官方上下文注入）  
+3) 至少配置 1 个 `providers[]`（`id/type/baseUrl/models/defaultModel`；Base URL 面板会按 type 自动填充默认值）  
+4) 可选：配置 `Prompts`（按 endpoint 追加 system prompt）  
+5) 点 `Save` 后对“后续请求”生效；要让 BYOK 接管请 `BYOK: Enable`（runtimeEnabled=true）
+
+参考示例：仓库根目录 `config.example.json`（仅示例；不会自动导入到面板）。
 
 ## 存储 keys
 
 - `augment-byok.config.v1`：配置（含 Key/Token；不参与 Sync）
-- `augment-byok.runtimeEnabled.v1`：运行时回滚开关（唯一加入 Sync）
+- `augment-byok.runtimeEnabled.v1`：运行时开关（唯一加入 Sync；关闭=回滚 official）
 - `augment-byok.historySummaryCache.v1`：历史摘要缓存（不参与 Sync）
 
 ## 命令
 
-- `BYOK: Open Config Panel`：手动填写 + `Save` 生效
-- `BYOK: Reload Config`：重新加载（丢弃未保存修改）
-- `BYOK: Enable` / `BYOK: Disable (Rollback)`：运行时开关（不改配置）
+- `BYOK: Open Config Panel`：打开配置面板
+- `BYOK: Reload Config`：重新加载配置（丢弃未保存修改）
+- `BYOK: Enable` / `BYOK: Disable (Rollback)`：切换运行时（不改配置）
+- `BYOK: Import Config`：从 JSON 文件导入（可选 merge 保留现有密钥）
+- `BYOK: Export Config`：导出到 JSON 文件（可选包含或脱敏密钥）
 - `BYOK: Clear History Summary Cache`：清理后台摘要缓存
 
-## 最小配置（面板）
+## Import / Export（JSON）
 
-- 填 `official.completionUrl` + `official.apiToken`（用于 `/get-models` 合并 + 官方上下文注入）。
-- 至少配置 1 个 `providers[]`（`id/type/baseUrl/models/defaultModel`；`apiKey` 可空但需在 `headers` 提供鉴权）。
-- 点击 `Save` 后发起新请求生效；需要启用时运行 `BYOK: Enable`（否则会回滚 official）。
+- Export
+  - `include secrets`：包含 `apiToken/apiKey/authorization` 等敏感字段（用于备份/迁移）
+  - `redact secrets`：敏感字段替换为 `<redacted>`（用于分享模板）
+- Import
+  - `Merge (preserve existing secrets)`：导入配置但“保留当前已存密钥”（当导入文件对应字段为空或 `<redacted>`）
+  - `Replace (overwrite everything)`：完全覆盖当前配置（密钥也会被覆盖/清空）
 
-参考结构见仓库根目录 `config.example.json`（仅示例，不会自动导入到面板）。
+## 配置结构（概要）
 
-## 配置结构（v1，概要）
+注意：配置字段名严格为 **camelCase**（v1）。不再兼容历史别名/旧字段（例如 `telemetry.disabledEndpoints`、`history_summary`、`base_url` 等）。如需迁移，请参考 `config.example.json` 手动调整后再导入。
 
-- `official`：`completionUrl` / `apiToken`（用于 `/get-models` 合并 + 官方上下文注入）
-- `providers[]`：上游列表
-  - `id`：provider 标识（`byok:<providerId>:...`）
+- `version`：当前为 `1`
+- `official`：官方连接（仅用于 `/get-models` 合并 + 官方上下文注入）
+  - `completionUrl`
+  - `apiToken`
+- `providers[]`：BYOK 上游列表（至少 1 个）
+  - `id`：provider 标识（model id 形如 `byok:<providerId>:<modelId>`）
   - `type`：
     <!-- BEGIN GENERATED: PROVIDER_TYPES -->
     `openai_compatible` | `openai_responses` | `anthropic` | `gemini_ai_studio`
     <!-- END GENERATED: PROVIDER_TYPES -->
-  - `baseUrl`、`apiKey`（可空，若 `headers` 已含鉴权）、`headers`、`models`、`defaultModel`、`requestDefaults`
-- `routing`：`rules[endpoint]`（`mode=official|byok|disabled`；provider 留空时默认使用 `providers[0]`；与内置默认规则合并：未出现的 endpoint 保持默认）
-- `historySummary`：面板暴露 `enabled` + byok model 选择（保存时映射为 `providerId` + `model`）；其它字段默认/保留
+  - `baseUrl`
+  - `apiKey`：可空（若 `headers` 已提供鉴权）
+  - `headers`：额外请求头（对象）
+  - `models`：model 列表（用于下拉选择与 `/get-models` 注入）
+  - `defaultModel`：默认 model
+  - `requestDefaults`：按 provider.type 做兼容/过滤（见下文）
+- `routing.rules[endpoint]`：路由规则（与内置默认规则合并）
+  - `mode`: `official | byok | disabled`
+  - `providerId` / `model`：仅在 `mode=byok` 时使用（留空则默认 `providers[0]` / defaultModel）
+- `prompts`：多功能提示词（追加到 system prompt；仅对 BYOK 生效）
+  - `endpointSystem[endpoint]`：按 endpoint 追加（例如 `/chat`、`/chat-stream`、`/edit`…；留空=不追加）
+- `historySummary`：历史摘要（自动压缩上下文，避免溢出；仅影响发给上游模型的内容）
+  - 面板显式暴露：`enabled` + `byok model` 选择（保存时映射为 `providerId` + `model`）
+  - 面板 Advanced：`prompt`（用于生成滚动摘要；保存后对后续摘要生效）
+  - 其它字段：默认/保留（用于更细粒度控制）
 
-## 语义/限制
+## 鉴权（apiKey / headers）
 
-- BYOK 只对 **13 个 LLM 数据面端点**提供语义实现：见 `ENDPOINTS.md`（其它端点即使配置 `byok` 也会回落 official）
-- model id：`byok:<providerId>:<modelId>`（`/get-models` 会注入 model registry/feature flags）
-- `/chat` / `/chat-stream` 均支持全部 `providers[].type`（见上方 `providers[].type` 列表）
-- `mode=disabled`：`callApi` 返回 `{}`；`callApiStream` 返回空 stream
-- 官方上下文注入（仅 `/chat`、`/chat-stream`）：`agents/codebase-retrieval`、`get-implicit-external-sources`、`search-external-sources`、`context-canvas/list`
-  - 关闭：请求体 `disable_retrieval=true` 或 `disableRetrieval=true`
-  - 失败：忽略（不影响 BYOK 生成）
-- 工具调用：会做 tool_result 配对修复避免 400/422（实现见 `payload/extension/out/byok/core/tool-pairing/index.js`）
-- Anthropic：`requestDefaults` 会自动过滤 OpenAI-only 字段（如 `presence_penalty`、`response_format`、`stream_options`），并兼容 `stop`→`stop_sequences`、`topP/topK`→`top_p/top_k`
-- Anthropic：遇到 400/422 会自动做一次“最小化 requestDefaults”重试（保留 `max_tokens`），降低偶发 INVALID_ARGUMENT
-- OpenAI Responses：`requestDefaults` 兼容 `max_tokens/maxTokens/maxOutputTokens` 别名（会映射为 `max_output_tokens`）；遇到 400/422 会自动用 minimal-defaults 重试（仅保留 `max_output_tokens`）
-- Gemini：`requestDefaults` 兼容 `max_tokens/maxTokens/max_output_tokens/maxOutputTokens` 别名（会映射为 `generationConfig.maxOutputTokens`）；遇到 400/422 会按 `no-defaults/no-images/no-tools` 兜底重试
+- `openai_compatible` / `openai_responses`
+  - `apiKey` 会自动注入 `Authorization: Bearer <token>`（不要手写 `Bearer ` 前缀）
+  - 若使用 `headers.authorization`：请填写完整值（例如 `Bearer ...`），且不要再配置 `apiKey`
+- `anthropic`
+  - `apiKey` 会自动注入 `x-api-key: <token>`（默认）
+  - 若你的代理要求 `Authorization: Bearer`：请在 `headers.authorization` 里显式填写
+- `gemini_ai_studio`
+  - `apiKey` 会写入 URL query `?key=<token>`（并在 stream 时追加 `alt=sse`）
+  - 也可用 `headers` 自定义鉴权（仅当你明确知道上游支持）
 
-兼容：
-- 旧字段 `telemetry.disabledEndpoints` 仍会被读取，并映射为 `routing.rules[*].mode=disabled`；面板不再展示该字段。
+## Routing / Model 选择（关键语义）
+
+- BYOK 只对 **13 个 LLM 数据面端点**提供语义实现：见 `docs/ENDPOINTS.md`
+  - 其它端点即使设置 `mode=byok`，也会回落 official（因为 runtime shim 只实现了 13 个）
+- model id 约定：`byok:<providerId>:<modelId>`
+  - `/get-models` 会把 `providers[].models` 注入到 model registry（含 feature flags），从而让上游能选择 `byok:*`
+- `mode=disabled`
+  - `callApi`：返回 `{}`（no-op）
+  - `callApiStream`：返回空 stream
+
+## Prompts（多功能提示词）
+
+目的：在不改上游请求结构的前提下，给 BYOK 的上游模型**按 endpoint**追加稳定的“长期规则/偏好”。  
+全局规则/偏好请使用 Augment 自带的 `User Guidelines / Workspace Guidelines / Rules`（BYOK 不提供全局追加，避免与 Augment 的全局设置重复/打架）。
+
+- 生效范围：**仅 BYOK**（runtimeEnabled=true 且 endpoint 走 byok 路由时）
+- 选择规则：
+  - `effectiveSystem = prompts.endpointSystem[endpoint]`（留空即不追加）
+  - `endpointSystem` 的 key 会被归一化为 pathname（例如 `"/chat-stream?x=1"` → `"/chat-stream"`）
+  - 注：`/get-models` 不会使用 prompt（它只是模型列表；用于注入 model picker），可忽略
+- 注入位置（保证输出约束仍在最后）：
+  - `/chat` / `/chat-stream`：追加到 chat 的 system prompt（与 `user_guidelines/workspace_guidelines/rules/agent_memories` 同级拼接）
+  - 其余 LLM 端点（如 `/edit`、`/completion`…）：追加到“BYOK purpose system prompt”中（输出约束始终最后）
+
+面板操作：
+- 一键填充（推荐）：用推荐模板覆盖当前 `endpointSystem`（建议先导出备份；刷新可撤销未保存修改）
+
+建议写法（降低“提示词互相打架”的概率）：
+- 写“偏好/约束”，避免写“让模型忽略输出约束”（例如 `/edit` 必须只输出代码）
+- 需要按功能差异化：用 `endpointSystem`（例如 commit message 用英文、completion 更保守等）
+- 需要“全局偏好”（语言/风格/输出结构等）：用 Augment 的 `User Guidelines`，而不是 BYOK prompts
+
+## 官方上下文注入（仅 `/chat`、`/chat-stream`）
+
+BYOK chat 会尝试调用官方能力，把外部上下文注入到请求中（失败会忽略，不影响 BYOK 生成）：
+
+- `agents/codebase-retrieval`
+- `get-implicit-external-sources`
+- `search-external-sources`
+- `context-canvas/list`
+
+关闭方式：请求体 `disable_retrieval=true` 或 `disableRetrieval=true`
+
+## Provider `requestDefaults` 兼容/兜底
+
+不同 provider 对字段支持不一致；BYOK 会做兼容/过滤，并在 400/422 时做一次兜底重试（尽量把请求“缩到最小可用”）：
+
+- Anthropic
+  - 自动过滤 OpenAI-only 字段（如 `presence_penalty`、`response_format`、`stream_options`）
+  - 兼容 `stop`→`stop_sequences`、`topP/topK`→`top_p/top_k`
+  - 422 `system: invalid type: string`：自动重试 `system=[{type:\"text\",text:\"...\"}]`（兼容部分 Anthropics 代理实现）
+  - 若代理进一步要求 `messages[].content` 也必须是 blocks：自动重试 `messages[].content=[{type:\"text\",...}]`
+  - 400/422：会最小化 `requestDefaults` 重试（保留 `max_tokens`）
+- OpenAI Responses
+  - 兼容 `max_tokens/maxTokens/maxOutputTokens` → `max_output_tokens`
+  - 400/422：最小化 defaults 重试（仅保留 `max_output_tokens`）
+- Gemini AI Studio
+  - 兼容 `max_tokens/maxTokens/max_output_tokens/maxOutputTokens` → `generationConfig.maxOutputTokens`
+  - 400/422：按 `no-defaults/no-images/no-tools` 兜底重试

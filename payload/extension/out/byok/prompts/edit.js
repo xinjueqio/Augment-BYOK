@@ -3,7 +3,7 @@
 const { normalizeString } = require("../infra/util");
 const { fmtSection, fmtCodeSection, extractDirectives, buildSystem, extractCodeContext } = require("./common");
 
-function buildEditPrompt(body) {
+function buildEditPrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const directives = extractDirectives(b);
   const lang = normalizeString(b.lang);
@@ -14,6 +14,7 @@ function buildEditPrompt(body) {
   const system = buildSystem({
     purpose: "edit",
     directives,
+    extraSystem,
     outputConstraints:
       "Apply the instruction to the selected code.\n- Output ONLY the replacement code for the selected range\n- No markdown, no explanations\n- Do NOT wrap in ``` code fences"
   });

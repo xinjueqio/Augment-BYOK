@@ -14,16 +14,16 @@
     const providerIds = providers.map((p) => normalizeStr(p?.id)).filter(Boolean);
     const providerMap = computeProviderIndexById(c);
 
-    const ENDPOINT_GROUPS_V1 = Array.isArray(ns.ENDPOINT_GROUPS_V1) ? ns.ENDPOINT_GROUPS_V1 : [];
-    const ENDPOINT_MEANINGS_V1 = ns.ENDPOINT_MEANINGS_V1 && typeof ns.ENDPOINT_MEANINGS_V1 === "object" ? ns.ENDPOINT_MEANINGS_V1 : {};
+    const catalog = typeof ns.getEndpointCatalogV1 === "function" ? ns.getEndpointCatalogV1() : { groups: [], meanings: {}, llmEndpoints: [] };
+    const ENDPOINT_GROUPS_V1 = Array.isArray(catalog.groups) ? catalog.groups : [];
+    const ENDPOINT_MEANINGS_V1 = catalog.meanings && typeof catalog.meanings === "object" ? catalog.meanings : {};
 
     const ruleEndpoints = Object.keys(rulesObj).sort();
     const knownEndpoints = uniq(ENDPOINT_GROUPS_V1.flatMap((g) => (Array.isArray(g?.endpoints) ? g.endpoints : [])));
     const knownEndpointSet = new Set(knownEndpoints);
     const unknownRuleEndpoints = uniq(ruleEndpoints.filter((ep) => ep && !knownEndpointSet.has(ep)));
 
-    const llmGroup = ENDPOINT_GROUPS_V1.find((g) => g && g.id === "llm_data_plane");
-    const byokSupportedSet = new Set(Array.isArray(llmGroup?.endpoints) ? llmGroup.endpoints : []);
+    const byokSupportedSet = new Set(Array.isArray(catalog.llmEndpoints) ? catalog.llmEndpoints : []);
 
     const endpointGroups = ENDPOINT_GROUPS_V1.concat(
       unknownRuleEndpoints.length

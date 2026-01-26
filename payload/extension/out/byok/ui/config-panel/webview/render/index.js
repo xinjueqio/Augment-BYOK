@@ -211,39 +211,6 @@
     "/notifications/mark-as-read": "标记已读"
   };
 
-  ns.summarizeSummaryBox = function summarizeSummaryBox(summary) {
-    const s = summary && typeof summary === "object" ? summary : {};
-    const off = s.official && typeof s.official === "object" ? s.official : {};
-    const providers = Array.isArray(s.providers) ? s.providers : [];
-
-    const lines = [];
-    lines.push(`<div class="title">Runtime</div>`);
-    lines.push(`<div class="small">runtimeEnabled: <span class="mono">${escapeHtml(String(Boolean(s.runtimeEnabled)))}</span></div>`);
-    if (s.storageKey) lines.push(`<div class="small">storageKey: <span class="mono">${escapeHtml(String(s.storageKey))}</span></div>`);
-
-    lines.push(`<div style="height:10px"></div>`);
-    lines.push(`<div class="title">Official</div>`);
-    lines.push(`<div class="small">completionUrl: <span class="mono">${escapeHtml(off.completionUrl || "")}</span></div>`);
-    lines.push(`<div class="small">apiToken: ${off.apiTokenSet ? `<span class="badge">set</span>` : `<span class="badge">empty</span>`}</div>`);
-
-    lines.push(`<div style="height:10px"></div>`);
-    lines.push(`<div class="title">Providers</div>`);
-    if (!providers.length) lines.push(`<div class="small">(none)</div>`);
-    for (const p of providers) {
-      lines.push(`<div class="card" style="padding:8px;margin-top:8px;">`);
-      lines.push(`<div class="small"><span class="mono">${escapeHtml(p.id)}</span> <span class="badge">${escapeHtml(p.type || "")}</span></div>`);
-      if (p.baseUrl) lines.push(`<div class="small">baseUrl: <span class="mono">${escapeHtml(p.baseUrl)}</span></div>`);
-      if (p.defaultModel) lines.push(`<div class="small">defaultModel: <span class="mono">${escapeHtml(p.defaultModel)}</span></div>`);
-      lines.push(`<div class="small">auth: ${p.authSet ? `<span class="badge">set</span>` : `<span class="badge">empty</span>`}</div>`);
-      lines.push(`<div class="small">apiKey: ${p.apiKeySet ? `<span class="badge">set</span>` : `<span class="badge">empty</span>`}</div>`);
-      lines.push(`<div class="small">headers: <span class="mono">${escapeHtml(String(p.headersCount || 0))}</span></div>`);
-      lines.push(`<div class="small">models: <span class="mono">${escapeHtml(String(p.modelsCount || 0))}</span></div>`);
-      lines.push(`</div>`);
-    }
-
-    return lines.join("");
-  };
-
   ns.ENDPOINT_GROUPS_V1 = ENDPOINT_GROUPS_V1;
   ns.ENDPOINT_MEANINGS_V1 = ENDPOINT_MEANINGS_V1;
 
@@ -253,4 +220,3 @@
   void optionHtml;
   void computeProviderIndexById;
 })();
-

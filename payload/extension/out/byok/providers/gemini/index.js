@@ -204,7 +204,7 @@ async function* geminiChatStreamChunks({ baseUrl, apiKey, model, systemInstructi
   nodeId = usageBuilt.nodeId;
   if (usageBuilt.chunk) yield usageBuilt.chunk;
 
-  const final = buildFinalChatChunk({ nodeId, fullText, stopReasonSeen, stopReason, sawToolUse });
+  const final = buildFinalChatChunk({ nodeId, stopReasonSeen, stopReason, sawToolUse });
   yield final.chunk;
 }
 

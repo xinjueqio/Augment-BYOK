@@ -47,3 +47,10 @@ test("decideRoute: model override forces byok when rule is official", () => {
   assert.equal(r.model, "gpt-4o-mini");
 });
 
+test("decideRoute: empty routing.rules falls back to built-in defaults", () => {
+  const cfg = defaultConfig();
+  cfg.routing.rules = {};
+  const r = decideRoute({ cfg, endpoint: "/get-models", body: {}, runtimeEnabled: true });
+  assert.equal(r.mode, "byok");
+  assert.equal(r.endpoint, "/get-models");
+});

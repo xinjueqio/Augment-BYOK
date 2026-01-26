@@ -61,7 +61,7 @@ async function* byokChatStream({ cfg, provider, model, requestedModel, body, tim
     }
     const out = { ...chunk };
     if (ctx.checkpointNotFound) out.checkpoint_not_found = true;
-    if (ctx.workspaceFileChunks.length && (!injectedWorkspaceChunks || out.stop_reason != null)) {
+    if (ctx.workspaceFileChunks.length && !injectedWorkspaceChunks) {
       out.workspace_file_chunks = ctx.workspaceFileChunks;
       injectedWorkspaceChunks = true;
     }

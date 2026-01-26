@@ -42,8 +42,7 @@ function inferContextWindowTokensFromModelName(model) {
 function resolveHistorySummaryConfig(cfg) {
   const c = cfg && typeof cfg === "object" ? cfg : {};
   const hs =
-    (c.historySummary && typeof c.historySummary === "object" && !Array.isArray(c.historySummary) ? c.historySummary : null) ||
-    (c.history_summary && typeof c.history_summary === "object" && !Array.isArray(c.history_summary) ? c.history_summary : null);
+    c.historySummary && typeof c.historySummary === "object" && !Array.isArray(c.historySummary) ? c.historySummary : null;
   if (!hs) return null;
   if (hs.enabled !== true) return null;
   const triggerOnHistorySizeChars = Number(hs.triggerOnHistorySizeChars);
@@ -76,4 +75,3 @@ function pickProviderById(cfg, providerId) {
 }
 
 module.exports = { resolveContextWindowTokens, resolveHistorySummaryConfig, pickProviderById };
-

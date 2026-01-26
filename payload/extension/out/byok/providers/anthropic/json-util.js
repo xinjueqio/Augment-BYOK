@@ -58,7 +58,6 @@ async function* emitAnthropicJsonAsAugmentChunks(json, { toolMetaByName, support
 
   const getToolMeta = makeToolMetaGetter(toolMetaByName);
   let nodeId = 0;
-  let fullText = "";
   let sawToolUse = false;
   let stopReason = null;
   let stopReasonSeen = false;
@@ -80,7 +79,6 @@ async function* emitAnthropicJsonAsAugmentChunks(json, { toolMetaByName, support
   const flushText = () => {
     const t = normalizeString(textBuf);
     if (!t) return null;
-    fullText += t;
     textBuf = "";
     nodeId += 1;
     return makeBackChatChunk({ text: t, nodes: [rawResponseNode({ id: nodeId, content: t })] });
@@ -139,7 +137,7 @@ async function* emitAnthropicJsonAsAugmentChunks(json, { toolMetaByName, support
   nodeId = usageBuilt.nodeId;
   if (usageBuilt.chunk) yield usageBuilt.chunk;
 
-  const final = buildFinalChatChunk({ nodeId, fullText, stopReasonSeen, stopReason, sawToolUse });
+  const final = buildFinalChatChunk({ nodeId, stopReasonSeen, stopReason, sawToolUse });
   yield final.chunk;
 }
 

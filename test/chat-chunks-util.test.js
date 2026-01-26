@@ -6,7 +6,6 @@ const {
   RESPONSE_NODE_TOOL_USE_START,
   RESPONSE_NODE_TOOL_USE,
   RESPONSE_NODE_TOKEN_USAGE,
-  RESPONSE_NODE_MAIN_TEXT_FINISHED,
   STOP_REASON_END_TURN,
   STOP_REASON_MAX_TOKENS,
   STOP_REASON_TOOL_USE_REQUESTED
@@ -77,17 +76,15 @@ test("buildTokenUsageChunk: emits token_usage node", () => {
 });
 
 test("buildFinalChatChunk: defaults to end_turn when no tool_use and no explicit stopReason", () => {
-  const built = buildFinalChatChunk({ nodeId: 0, fullText: "hello", stopReasonSeen: false, stopReason: null, sawToolUse: false });
-  assert.equal(built.nodeId, 1);
+  const built = buildFinalChatChunk({ nodeId: 0, stopReasonSeen: false, stopReason: null, sawToolUse: false });
+  assert.equal(built.nodeId, 0);
   assert.equal(built.chunk.text, "");
   assert.equal(built.chunk.stop_reason, STOP_REASON_END_TURN);
-  assert.equal(built.chunk.nodes.length, 1);
-  assert.equal(built.chunk.nodes[0].type, RESPONSE_NODE_MAIN_TEXT_FINISHED);
-  assert.equal(built.chunk.nodes[0].content, "hello");
+  assert.equal(built.chunk.nodes, undefined);
 });
 
 test("buildFinalChatChunk: defaults to tool_use_requested when saw tool use", () => {
-  const built = buildFinalChatChunk({ nodeId: 0, fullText: "", stopReasonSeen: false, stopReason: null, sawToolUse: true });
+  const built = buildFinalChatChunk({ nodeId: 0, stopReasonSeen: false, stopReason: null, sawToolUse: true });
   assert.equal(built.nodeId, 0);
   assert.equal(built.chunk.text, "");
   assert.equal(built.chunk.stop_reason, STOP_REASON_TOOL_USE_REQUESTED);
@@ -95,7 +92,6 @@ test("buildFinalChatChunk: defaults to tool_use_requested when saw tool use", ()
 });
 
 test("buildFinalChatChunk: explicit stopReason overrides tool_use_requested", () => {
-  const built = buildFinalChatChunk({ nodeId: 0, fullText: "", stopReasonSeen: true, stopReason: STOP_REASON_MAX_TOKENS, sawToolUse: true });
+  const built = buildFinalChatChunk({ nodeId: 0, stopReasonSeen: true, stopReason: STOP_REASON_MAX_TOKENS, sawToolUse: true });
   assert.equal(built.chunk.stop_reason, STOP_REASON_MAX_TOKENS);
 });
-

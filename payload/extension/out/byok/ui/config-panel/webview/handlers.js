@@ -5,7 +5,7 @@
   const core = ns && typeof ns === "object" ? ns.__byokCfgPanelCore : null;
   if (!ns || typeof ns.qs !== "function" || !core || typeof core.setUiState !== "function") throw new Error("BYOK panel init failed (missing core)");
 
-  const { qs, normalizeStr, uniq, parseModelsTextarea, parseJsonOrEmptyObject, debugLog, newRequestId } = ns;
+  const { qs, normalizeStr, uniq, parseModelsTextarea, parseJsonOrEmptyObject, debugLog, newRequestId, defaultBaseUrlForProviderType } = ns;
   const {
     getUiState,
     setUiState,
@@ -40,7 +40,7 @@
       return;
     }
     if (t === "render") {
-      setUiState({ cfg: msg.config || {}, summary: msg.summary || {}, clearOfficialToken: false, modal: null, dirty: false }, { preserveEdits: false });
+      setUiState({ cfg: msg.config || {}, runtimeEnabled: msg.runtimeEnabled === true, clearOfficialToken: false, modal: null, dirty: false }, { preserveEdits: false });
       return;
     }
     if (t === "providerModelsFetched") {
@@ -102,13 +102,11 @@
     }
   }
 
-  window.addEventListener("message", (ev) => {
-    handleMessage(ev.data);
-  });
+  window.addEventListener("message", (ev) => handleMessage(ev.data));
 
-  function handleAction(action, btn) {
-    const a = normalizeStr(action);
-    if (!a) return;
+	  function handleAction(action, btn) {
+	    const a = normalizeStr(action);
+	    if (!a) return;
     const idxForLog = btn && typeof btn.getAttribute === "function" ? Number(btn.getAttribute("data-idx")) : NaN;
     if (Number.isFinite(idxForLog)) debugLog("action", { action: a, idx: idxForLog });
     else debugLog("action", { action: a });
@@ -198,7 +196,7 @@
       cfg.providers.push({
         id: `provider_${cfg.providers.length + 1}`,
         type: "openai_compatible",
-        baseUrl: "",
+        baseUrl: normalizeStr(typeof defaultBaseUrlForProviderType === "function" ? defaultBaseUrlForProviderType("openai_compatible") : ""),
         apiKey: "",
         models: [],
         defaultModel: "",
@@ -231,9 +229,32 @@
       if (cfg.providers[idx]) cfg.providers[idx].apiKey = "";
       return setUiState({ cfg, status: "Provider apiKey cleared (pending save).", dirty: true }, { preserveEdits: false });
     }
+    if (a === "setProviderBaseUrlDefault") {
+      const idx = btn && typeof btn.getAttribute === "function" ? Number(btn.getAttribute("data-idx")) : NaN;
+      const cfg = gatherConfigFromDom();
+      cfg.providers = Array.isArray(cfg.providers) ? cfg.providers : [];
+      const p = cfg.providers[idx] && typeof cfg.providers[idx] === "object" ? cfg.providers[idx] : null;
+      if (!p) return setUiState({ status: "Set default Base URL: provider index invalid." }, { preserveEdits: true });
+      const t = normalizeStr(p.type);
+      const d = normalizeStr(typeof defaultBaseUrlForProviderType === "function" ? defaultBaseUrlForProviderType(t) : "");
+      if (!d) return setUiState({ status: `Set default Base URL: unknown provider.type=${t || "(empty)"}` }, { preserveEdits: true });
+      p.baseUrl = d;
+      return setUiState({ cfg, status: "Provider baseUrl set to default (pending save).", dirty: true }, { preserveEdits: false });
+    }
+
+    if (typeof ns.handlePromptsAction === "function" && ns.handlePromptsAction({ action: a, gatherConfigFromDom, setUiState })) return;
+
     if (a === "save") {
       postToExtension({ type: "save", config: gatherConfigFromDom() });
       return setUiState({ status: "Saving..." }, { preserveEdits: true });
+    }
+    if (a === "exportConfig") {
+      postToExtension({ type: "exportConfig", config: gatherConfigFromDom() });
+      return setUiState({ status: "Exporting..." }, { preserveEdits: true });
+    }
+    if (a === "importConfig") {
+      postToExtension({ type: "importConfig", dirty: Boolean(getUiState()?.dirty) });
+      return setUiState({ status: "Importing..." }, { preserveEdits: true });
     }
     if (a === "clearHistorySummaryCache") {
       postToExtension({ type: "clearHistorySummaryCache" });
@@ -248,21 +269,12 @@
       postToExtension({ type: "reloadWindow" });
       return setUiState({ status: "Reload Window requested..." }, { preserveEdits: true });
     }
-    if (a === "toggleRuntime") {
-      const enabled = Boolean(getUiState()?.summary?.runtimeEnabled);
-      postToExtension({ type: enabled ? "disableRuntime" : "enableRuntime" });
-      return setUiState({ status: enabled ? "Disabling runtime..." : "Enabling runtime..." }, { preserveEdits: true });
-    }
-    if (a === "toggleSide") return setUiState({ sideCollapsed: !Boolean(getUiState()?.sideCollapsed) }, { preserveEdits: true });
-    if (a === "disableRuntime") return postToExtension({ type: "disableRuntime" });
-    if (a === "enableRuntime") return postToExtension({ type: "enableRuntime" });
     debugLog("action.unknown", { action: a });
   }
 
   document.addEventListener("click", (ev) => {
     const btn = ev.target && ev.target.closest ? ev.target.closest("[data-action]") : null;
-    if (!btn) return;
-    handleAction(btn.getAttribute("data-action"), btn);
+    if (btn) handleAction(btn.getAttribute("data-action"), btn);
   });
 
   function handleRuleChange(el) {
@@ -314,13 +326,11 @@
 
   function handleChange(el) {
     if (!el || typeof el.matches !== "function") return;
-
     if (el.matches("input[type=\"checkbox\"][data-selftest-provider-key]")) {
       const keys = gatherSelfTestProviderKeysFromDom();
       setPersistedState({ selfTestProviderKeys: keys });
       return setUiState({ selfTestProviderKeys: keys }, { preserveEdits: true });
     }
-
     if (el.matches("#runtimeEnabledToggle")) {
       const enable = Boolean(el.checked);
       postToExtension({ type: enable ? "enableRuntime" : "disableRuntime" });
@@ -328,9 +338,27 @@
     }
 
     if (el.matches("[data-rule-ep][data-rule-key]")) return handleRuleChange(el);
+    if (el.matches("[data-p-key=\"type\"]")) {
+      const idx = Number(el.getAttribute("data-p-idx"));
+      const nextType = normalizeStr(el.value);
+      const cfg = gatherConfigFromDom();
+      cfg.providers = Array.isArray(cfg.providers) ? cfg.providers : [];
+      const p =
+        Number.isFinite(idx) && idx >= 0 && idx < cfg.providers.length && cfg.providers[idx] && typeof cfg.providers[idx] === "object"
+          ? cfg.providers[idx]
+          : null;
+      if (!p) return setUiState({ status: "Provider type changed but provider index invalid." }, { preserveEdits: true });
+      if (!normalizeStr(p.baseUrl)) {
+        const d = normalizeStr(typeof defaultBaseUrlForProviderType === "function" ? defaultBaseUrlForProviderType(nextType) : "");
+        if (d) {
+          p.baseUrl = d;
+          return setUiState({ cfg, status: "Provider type changed: baseUrl set to default (pending save).", dirty: true }, { preserveEdits: false });
+        }
+      }
+      return setUiState({ cfg, status: "Provider updated (pending save).", dirty: true }, { preserveEdits: false });
+    }
 
-    if (el.matches("[data-p-key=\"type\"],[data-p-key=\"defaultModel\"],[data-p-key=\"thinkingLevel\"]"))
-      return setUiState({ status: "Provider updated (pending save).", dirty: true }, { preserveEdits: true });
+    if (el.matches("[data-p-key=\"defaultModel\"],[data-p-key=\"thinkingLevel\"]")) return setUiState({ status: "Provider updated (pending save).", dirty: true }, { preserveEdits: true });
     if (el.matches("#historySummaryEnabled,#historySummaryByokModel")) return markDirty("History summary updated (pending save).");
   }
 
@@ -352,11 +380,6 @@
     if (el.matches("input[type=\"text\"],input[type=\"number\"],input[type=\"password\"],input[type=\"url\"],textarea")) return markDirty("Edited (pending save).");
   }
 
-  document.addEventListener("change", (ev) => {
-    handleChange(ev.target);
-  });
-
-  document.addEventListener("input", (ev) => {
-    handleInput(ev.target);
-  });
+  document.addEventListener("change", (ev) => handleChange(ev.target));
+  document.addEventListener("input", (ev) => handleInput(ev.target));
 })();

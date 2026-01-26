@@ -2,6 +2,7 @@
 
 const { normalizeString, randomId } = require("../infra/util");
 const { ensureModelRegistryFeatureFlags } = require("./model-registry");
+const { resolveExtraSystemPrompt } = require("../config/prompts");
 const { buildPromptEnhancerPrompt } = require("../prompts/prompt-enhancer");
 const { buildCompletionPrompt } = require("../prompts/completion");
 const { buildChatInputCompletionPrompt } = require("../prompts/chat-input-completion");
@@ -20,19 +21,22 @@ function buildFallbackChatPrompt(body) {
   return { system: "", messages: [{ role: "user", content: user }] };
 }
 
-function buildMessagesForEndpoint(endpoint, body) {
+function buildMessagesForEndpoint(endpoint, body, cfg) {
   const ep = normalizeString(endpoint);
-  if (ep === "/completion") return buildCompletionPrompt(body);
-  if (ep === "/chat-input-completion") return buildChatInputCompletionPrompt(body);
-  if (ep === "/edit") return buildEditPrompt(body);
-  if (ep === "/instruction-stream") return buildInstructionStreamPrompt(body);
-  if (ep === "/smart-paste-stream") return buildSmartPasteStreamPrompt(body);
-  if (ep === "/generate-commit-message-stream") return buildCommitMessageStreamPrompt(body);
-  if (ep === "/generate-conversation-title") return buildConversationTitlePrompt(body);
-  if (ep === "/next-edit-stream") return buildNextEditStreamPrompt(body);
-  if (ep === "/next_edit_loc") return buildNextEditLocPrompt(body);
-  if (ep === "/prompt-enhancer") return buildPromptEnhancerPrompt(body);
-  return buildFallbackChatPrompt(body);
+  const extraSystem = resolveExtraSystemPrompt(cfg, ep);
+  if (ep === "/completion") return buildCompletionPrompt(body, { extraSystem });
+  if (ep === "/chat-input-completion") return buildChatInputCompletionPrompt(body, { extraSystem });
+  if (ep === "/edit") return buildEditPrompt(body, { extraSystem });
+  if (ep === "/instruction-stream") return buildInstructionStreamPrompt(body, { extraSystem });
+  if (ep === "/smart-paste-stream") return buildSmartPasteStreamPrompt(body, { extraSystem });
+  if (ep === "/generate-commit-message-stream") return buildCommitMessageStreamPrompt(body, { extraSystem });
+  if (ep === "/generate-conversation-title") return buildConversationTitlePrompt(body, { extraSystem });
+  if (ep === "/next-edit-stream") return buildNextEditStreamPrompt(body, { extraSystem });
+  if (ep === "/next_edit_loc") return buildNextEditLocPrompt(body, { extraSystem });
+  if (ep === "/prompt-enhancer") return buildPromptEnhancerPrompt(body, { extraSystem });
+  const fallback = buildFallbackChatPrompt(body);
+  if (!extraSystem) return fallback;
+  return { system: extraSystem, messages: fallback.messages };
 }
 
 function coerceText(text) {

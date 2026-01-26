@@ -2,7 +2,7 @@
   "use strict";
 
   const ns = (window.__byokCfgPanel = window.__byokCfgPanel || {});
-  const { normalizeStr, uniq, escapeHtml, optionHtml, validateProviderDraft, pickIssueByKey } = ns;
+  const { normalizeStr, uniq, escapeHtml, optionHtml, validateProviderDraft, pickIssueByKey, defaultBaseUrlForProviderType } = ns;
 
   const KNOWN_PROVIDER_TYPES = Array.isArray(ns.KNOWN_PROVIDER_TYPES) ? ns.KNOWN_PROVIDER_TYPES : [];
 
@@ -67,6 +67,7 @@
         const pKey = pid || `idx:${idx}`;
         const type = normalizeStr(p?.type);
         const baseUrl = normalizeStr(p?.baseUrl);
+        const baseUrlPlaceholder = normalizeStr(typeof defaultBaseUrlForProviderType === "function" ? defaultBaseUrlForProviderType(type) : "") || "https://api.openai.com/v1";
         const apiKeySet = Boolean(normalizeStr(p?.apiKey));
         const dm = normalizeStr(p?.defaultModel);
         const rawModels = Array.isArray(p?.models) ? p.models : [];
@@ -132,10 +133,13 @@
                         <div class="${typeIssue.cls}" data-provider-idx="${idx}" data-provider-issue-for="type">${escapeHtml(typeIssue.text)}</div>
                       </div>
                       <div class="form-group form-grid--full">
-                        <label class="form-label">Base URL</label>
-                        <input type="url" class="${baseUrlIssue.inputCls}" data-p-idx="${idx}" data-p-key="baseUrl" value="${escapeHtml(baseUrl)}" placeholder="https://api.openai.com/v1" />
+                        <div class="flex-between flex-row">
+                          <label class="form-label">Base URL</label>
+                          <button class="btn btn--small" data-action="setProviderBaseUrlDefault" data-idx="${idx}" title="使用该 Type 的默认 Base URL">默认</button>
+                        </div>
+                        <input type="url" class="${baseUrlIssue.inputCls}" data-p-idx="${idx}" data-p-key="baseUrl" value="${escapeHtml(baseUrl)}" placeholder="${escapeHtml(baseUrlPlaceholder)}" />
                         <div class="${baseUrlIssue.cls}" data-provider-idx="${idx}" data-provider-issue-for="baseUrl">${escapeHtml(baseUrlIssue.text)}</div>
-                        <div class="text-muted text-xs">必须是 http(s) URL。示例：OpenAI=<span class="text-mono">https://api.openai.com/v1</span></div>
+                        <div class="text-muted text-xs">必须是 http(s) URL。示例：<span class="text-mono">${escapeHtml(baseUrlPlaceholder)}</span></div>
                       </div>
                       <div class="form-group form-grid--full">
                         <div class="flex-between flex-row">

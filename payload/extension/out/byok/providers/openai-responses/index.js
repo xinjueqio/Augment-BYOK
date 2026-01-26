@@ -7,6 +7,7 @@ const { normalizeUsageInt, makeToolMetaGetter, assertSseResponse, isInvalidReque
 const { fetchOkWithRetry, extractErrorMessageFromJson } = require("../request-util");
 const { buildToolUseChunks, buildTokenUsageChunk, buildFinalChatChunk } = require("../chat-chunks-util");
 const { buildOpenAiResponsesRequest, buildMinimalRetryRequestDefaults } = require("./request");
+const { createOutputTextTracker } = require("./output-text-tracker");
 const {
   extractToolCallsFromResponseOutput,
   extractReasoningSummaryFromResponseOutput,
@@ -144,10 +145,30 @@ async function* openAiResponsesStreamTextDeltas({ baseUrl, apiKey, model, instru
 
   const sse = makeSseJsonIterator(resp, { doneData: "[DONE]" });
   let emitted = 0;
+  const textTracker = createOutputTextTracker();
+
   for await (const { json, eventType } of sse.events) {
     if (eventType === "response.output_text.delta" && typeof json?.delta === "string" && json.delta) {
+      const idx = json?.output_index ?? json?.outputIndex ?? json?.index;
       emitted += 1;
+      textTracker.pushDelta(idx, json.delta);
       yield json.delta;
+    } else if (eventType === "response.output_text.done") {
+      const idx = json?.output_index ?? json?.outputIndex ?? json?.index;
+      const full = typeof json?.text === "string" ? json.text : "";
+      const rest = textTracker.applyFinalText(idx, full).rest;
+      if (rest) {
+        emitted += 1;
+        yield rest;
+      }
+    } else if (eventType === "response.completed" && json?.response && typeof json.response === "object") {
+      // 兼容：部分网关不发 done，只在 completed 里给 output_text。
+      const full = typeof json.response.output_text === "string" ? json.response.output_text : "";
+      const rest = textTracker.applyFinalText(0, full).rest;
+      if (rest) {
+        emitted += 1;
+        yield rest;
+      }
     } else if (eventType === "response.error") {
       const msg = normalizeString(extractErrorMessageFromJson(json)) || "upstream error event";
       throw new Error(`OpenAI(responses-stream) upstream error event: ${msg}`.trim());
@@ -186,7 +207,6 @@ async function* openAiResponsesChatStreamChunks({ baseUrl, apiKey, model, instru
   await assertSseResponse(resp, { label: "OpenAI(responses-chat-stream)", expectedHint: "请确认 baseUrl 指向 OpenAI /responses SSE" });
 
   let nodeId = 0;
-  let fullText = "";
   let sawToolUse = false;
   let sawMaxTokens = false;
   let usageInputTokens = null;
@@ -196,6 +216,7 @@ async function* openAiResponsesChatStreamChunks({ baseUrl, apiKey, model, instru
   let emittedChunks = 0;
   let finalResponse = null;
   const toolCallsByOutputIndex = new Map(); // output_index -> {call_id,name,arguments}
+  const textTracker = createOutputTextTracker();
 
   const sse = makeSseJsonIterator(resp, { doneData: "[DONE]" });
   for await (const { json, eventType } of sse.events) {
@@ -234,11 +255,24 @@ async function* openAiResponsesChatStreamChunks({ baseUrl, apiKey, model, instru
     }
 
     if (eventType === "response.output_text.delta" && typeof json?.delta === "string" && json.delta) {
+      const idx = json?.output_index ?? json?.outputIndex ?? json?.index;
       const t = json.delta;
-      fullText += t;
+      textTracker.pushDelta(idx, t);
       nodeId += 1;
       emittedChunks += 1;
       yield makeBackChatChunk({ text: t, nodes: [rawResponseNode({ id: nodeId, content: t })] });
+      continue;
+    }
+
+    if (eventType === "response.output_text.done") {
+      const idx = json?.output_index ?? json?.outputIndex ?? json?.index;
+      const full = typeof json?.text === "string" ? json.text : "";
+      const rest = textTracker.applyFinalText(idx, full).rest;
+      if (rest) {
+        nodeId += 1;
+        emittedChunks += 1;
+        yield makeBackChatChunk({ text: rest, nodes: [rawResponseNode({ id: nodeId, content: rest })] });
+      }
       continue;
     }
 
@@ -260,6 +294,13 @@ async function* openAiResponsesChatStreamChunks({ baseUrl, apiKey, model, instru
 
     if (eventType === "response.completed" && json?.response && typeof json.response === "object") {
       finalResponse = json.response;
+      const full = typeof json.response.output_text === "string" ? json.response.output_text : "";
+      const rest = textTracker.applyFinalText(0, full).rest;
+      if (rest) {
+        nodeId += 1;
+        emittedChunks += 1;
+        yield makeBackChatChunk({ text: rest, nodes: [rawResponseNode({ id: nodeId, content: rest })] });
+      }
       const usage = json.response?.usage && typeof json.response.usage === "object" ? json.response.usage : null;
       if (usage) {
         const inputTokens = normalizeUsageInt(usage.input_tokens);
@@ -280,6 +321,7 @@ async function* openAiResponsesChatStreamChunks({ baseUrl, apiKey, model, instru
 
   let toolCalls = [];
   let reasoningSummary = "";
+  let finalText = "";
   if (finalResponse && typeof finalResponse === "object") {
     const out = Array.isArray(finalResponse.output) ? finalResponse.output : [];
     toolCalls = extractToolCallsFromResponseOutput(out);
@@ -293,7 +335,7 @@ async function* openAiResponsesChatStreamChunks({ baseUrl, apiKey, model, instru
       if (outputTokens != null) usageOutputTokens = outputTokens;
       if (cached != null) usageCacheReadInputTokens = cached;
     }
-    if (!fullText) fullText = normalizeString(finalResponse.output_text);
+    finalText = typeof finalResponse.output_text === "string" ? finalResponse.output_text : "";
   } else {
     toolCalls = Array.from(toolCallsByOutputIndex.entries())
       .sort((a, b) => a[0] - b[0])
@@ -302,6 +344,15 @@ async function* openAiResponsesChatStreamChunks({ baseUrl, apiKey, model, instru
   }
 
   if (reasoningSummary) thinkingBuf = reasoningSummary;
+
+  if (finalText) {
+    const rest = textTracker.applyFinalText(0, finalText).rest;
+    if (rest) {
+      nodeId += 1;
+      emittedChunks += 1;
+      yield makeBackChatChunk({ text: rest, nodes: [rawResponseNode({ id: nodeId, content: rest })] });
+    }
+  }
 
   if (thinkingBuf) {
     nodeId += 1;
@@ -330,13 +381,7 @@ async function* openAiResponsesChatStreamChunks({ baseUrl, apiKey, model, instru
   const hasUsage = usageBuilt.chunk != null;
   if (usageBuilt.chunk) yield usageBuilt.chunk;
 
-  const final = buildFinalChatChunk({
-    nodeId,
-    fullText,
-    stopReasonSeen: sawMaxTokens,
-    stopReason: sawMaxTokens ? STOP_REASON_MAX_TOKENS : null,
-    sawToolUse
-  });
+  const final = buildFinalChatChunk({ nodeId, stopReasonSeen: sawMaxTokens, stopReason: sawMaxTokens ? STOP_REASON_MAX_TOKENS : null, sawToolUse });
   yield final.chunk;
 
   const emittedAny = emittedChunks > 0 || hasUsage || toolCalls.length > 0 || Boolean(thinkingBuf);

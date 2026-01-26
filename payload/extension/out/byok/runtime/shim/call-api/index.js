@@ -48,8 +48,8 @@ async function handleGetModels({ cfg, ep, transform, abortSignal, timeoutMs, ups
   }
 }
 
-async function completeTextForEndpoint({ route, ep, body, timeoutMs, abortSignal, requestId, kind }) {
-  const { system, messages } = buildMessagesForEndpoint(ep, body);
+async function completeTextForEndpoint({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, kind }) {
+  const { system, messages } = buildMessagesForEndpoint(ep, body, cfg);
   const suffix = normalizeString(kind) || "complete";
   const label = `[callApi ${ep}] rid=${requestId} ${suffix} provider=${providerLabel(route.provider)} model=${normalizeString(route.model) || "unknown"}`;
   return await withTiming(label, async () =>
@@ -57,13 +57,13 @@ async function completeTextForEndpoint({ route, ep, body, timeoutMs, abortSignal
   );
 }
 
-async function handleCompletion({ route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
-  const text = await completeTextForEndpoint({ route, ep, body, timeoutMs, abortSignal, requestId, kind: "complete" });
+async function handleCompletion({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
+  const text = await completeTextForEndpoint({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, kind: "complete" });
   return safeTransform(transform, makeBackCompletionResult(text), ep);
 }
 
-async function handleEdit({ route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
-  const text = await completeTextForEndpoint({ route, ep, body, timeoutMs, abortSignal, requestId, kind: "edit" });
+async function handleEdit({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
+  const text = await completeTextForEndpoint({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, kind: "edit" });
   return safeTransform(transform, makeBackTextResult(text), ep);
 }
 
@@ -83,7 +83,7 @@ async function handleChat({ cfg, route, ep, body, transform, timeoutMs, abortSig
   return safeTransform(transform, out, ep);
 }
 
-async function handleNextEditLoc({ route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
+async function handleNextEditLoc({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
   const b = body && typeof body === "object" ? body : {};
   const max = pickNumResults(b, { defaultValue: 1, max: 6 });
 
@@ -93,7 +93,7 @@ async function handleNextEditLoc({ route, ep, body, transform, timeoutMs, abortS
 
   try {
     const bodyForPrompt = await maybeAugmentBodyWithWorkspaceBlob(body, { pathHint: fallbackPath });
-    const text = await completeTextForEndpoint({ route, ep, body: bodyForPrompt, timeoutMs, abortSignal, requestId, kind: "llm" });
+    const text = await completeTextForEndpoint({ cfg, route, ep, body: bodyForPrompt, timeoutMs, abortSignal, requestId, kind: "llm" });
     llmCandidates = parseNextEditLocCandidatesFromText(text, { fallbackPath, max, source: "byok:llm" });
   } catch (err) {
     warn("next_edit_loc llm fallback to diagnostics", { requestId, error: err instanceof Error ? err.message : String(err) });

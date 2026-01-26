@@ -1,17 +1,17 @@
 "use strict";
 
 const { normalizeString } = require("../infra/util");
-const { fmtSection, fmtCodeSection, buildSystem } = require("./common");
+const { fmtSection, fmtCodeSection, buildPurposeSystem } = require("./common");
 
-function buildChatInputCompletionPrompt(body) {
+function buildChatInputCompletionPrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const prompt = typeof b.prompt === "string" ? b.prompt : "";
   const suffix = typeof b.suffix === "string" ? b.suffix : "";
   const path = normalizeString(b.path);
 
-  const system = buildSystem({
+  const system = buildPurposeSystem({
     purpose: "chat-input-completion",
-    directives: { userGuidelines: "", workspaceGuidelines: "", rulesText: "" },
+    extraSystem,
     outputConstraints:
       "Continue the user's partial chat input.\n- Output ONLY the completion text (do not repeat the given prompt)\n- No quotes, no markdown\n- Do NOT wrap in ``` code fences"
   });

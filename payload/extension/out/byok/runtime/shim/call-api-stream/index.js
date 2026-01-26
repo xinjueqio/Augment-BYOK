@@ -27,8 +27,8 @@ function guardWithMeta({ ep, src, transform, makeErrorChunk, requestId, route })
   });
 }
 
-function makeByokTextDeltas({ route, ep, body, timeoutMs, abortSignal, requestId, labelSuffix } = {}) {
-  const { system, messages } = buildMessagesForEndpoint(ep, body);
+function makeByokTextDeltas({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, labelSuffix } = {}) {
+  const { system, messages } = buildMessagesForEndpoint(ep, body, cfg);
   const suffix = normalizeString(labelSuffix) || "delta";
   const label = `[callApiStream ${ep}] rid=${requestId} ${suffix} provider=${providerLabel(route.provider)} model=${normalizeString(route.model) || "unknown"}`;
   return traceAsyncGenerator(label, byokStreamText({ provider: route.provider, model: route.model, system, messages, timeoutMs, abortSignal }));
@@ -57,8 +57,8 @@ async function handleChatStream({ cfg, route, ep, body, transform, timeoutMs, ab
   });
 }
 
-async function handleChatResultDeltaStream({ route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
-  const deltas = makeByokTextDeltas({ route, ep, body, timeoutMs, abortSignal, requestId, labelSuffix: "delta" });
+async function handleChatResultDeltaStream({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
+  const deltas = makeByokTextDeltas({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, labelSuffix: "delta" });
 
   const src = (async function* () {
     for await (const delta of deltas) yield makeBackChatResult(delta, { nodes: [] });
@@ -74,9 +74,9 @@ async function handleChatResultDeltaStream({ route, ep, body, transform, timeout
   });
 }
 
-async function handleInstructionLikeStream({ route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
+async function handleInstructionLikeStream({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
   const meta = await buildInstructionReplacementMeta(body);
-  const deltas = makeByokTextDeltas({ route, ep, body, timeoutMs, abortSignal, requestId, labelSuffix: "delta" });
+  const deltas = makeByokTextDeltas({ cfg, route, ep, body, timeoutMs, abortSignal, requestId, labelSuffix: "delta" });
 
   const src = (async function* () {
     yield { text: "", ...meta };
@@ -97,7 +97,7 @@ async function handleInstructionLikeStream({ route, ep, body, transform, timeout
   });
 }
 
-async function handleNextEditStream({ route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
+async function handleNextEditStream({ cfg, route, ep, body, transform, timeoutMs, abortSignal, requestId }) {
   const b = body && typeof body === "object" ? body : {};
   const hasPrefix = typeof b.prefix === "string";
   const hasSuffix = typeof b.suffix === "string";
@@ -107,7 +107,7 @@ async function handleNextEditStream({ route, ep, body, transform, timeoutMs, abo
       : await maybeAugmentBodyWithWorkspaceBlob(body, { pathHint: pickPath(body), blobKey: pickBlobNameHint(body) });
 
   const { promptBody, path, blobName, selectionBegin, selectionEnd, existingCode } = buildNextEditStreamRuntimeContext(bodyForContext);
-  const { system, messages } = buildMessagesForEndpoint(ep, promptBody);
+  const { system, messages } = buildMessagesForEndpoint(ep, promptBody, cfg);
   const label = `[callApiStream ${ep}] rid=${requestId} complete provider=${providerLabel(route.provider)} model=${normalizeString(route.model) || "unknown"}`;
   const suggestedCode = await withTiming(label, async () =>
     await byokCompleteText({ provider: route.provider, model: route.model, system, messages, timeoutMs, abortSignal })

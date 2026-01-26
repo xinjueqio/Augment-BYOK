@@ -1,6 +1,25 @@
 "use strict";
 
 const { normalizeEndpoint, normalizeString, parseByokModelId } = require("../infra/util");
+const { defaultConfig } = require("../config/default-config");
+
+const DEFAULT_ROUTING_RULES = (() => {
+  try {
+    const cfg = defaultConfig();
+    const rules = cfg?.routing?.rules && typeof cfg.routing.rules === "object" && !Array.isArray(cfg.routing.rules) ? cfg.routing.rules : null;
+    const out = Object.create(null);
+    if (!rules) return out;
+    for (const [k, v] of Object.entries(rules)) {
+      const ep = normalizeEndpoint(k);
+      if (!ep) continue;
+      if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+      out[ep] = v;
+    }
+    return out;
+  } catch {
+    return Object.create(null);
+  }
+})();
 
 function pickRequestedModel(body) {
   if (!body || typeof body !== "object") return "";
@@ -11,7 +30,9 @@ function pickRequestedModel(body) {
 function getRule(cfg, endpoint) {
   const rules = cfg?.routing?.rules && typeof cfg.routing.rules === "object" ? cfg.routing.rules : null;
   const r = rules && rules[endpoint] && typeof rules[endpoint] === "object" ? rules[endpoint] : null;
-  return r || null;
+  if (r) return r;
+  const d = DEFAULT_ROUTING_RULES[endpoint];
+  return d && typeof d === "object" ? d : null;
 }
 
 function pickProvider(cfg, providerId) {

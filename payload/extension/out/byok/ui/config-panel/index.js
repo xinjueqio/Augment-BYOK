@@ -2,39 +2,15 @@
 
 const { debug, info, warn } = require("../../infra/log");
 const { DEFAULT_SELF_TEST_TIMEOUT_MS } = require("../../infra/constants");
-const { normalizeString, normalizeRawToken, hasAuthHeader } = require("../../infra/util");
-const { defaultConfig } = require("../../config/config");
+const { normalizeString, normalizeRawToken } = require("../../infra/util");
 const { setRuntimeEnabled: setRuntimeEnabledPersisted } = require("../../config/state");
 const { clearHistorySummaryCacheAll } = require("../../core/augment-history-summary/auto");
 const { runSelfTest } = require("../../core/self-test/run");
 const { fetchOfficialGetModels } = require("../../runtime/official/get-models");
 const { fetchProviderModels } = require("../../providers/models");
 const { renderConfigPanelHtml } = require("./html");
+const { exportConfigWithDialog, importConfigWithDialog, runIoWithUiErrorBoundary } = require("../config-io");
 
-function summarizeRuntime({ cfgMgr, state }) {
-  const cfg = cfgMgr?.get?.() || defaultConfig();
-  const off = cfg?.official && typeof cfg.official === "object" ? cfg.official : {};
-  const providers = Array.isArray(cfg?.providers) ? cfg.providers : [];
-
-  return {
-    runtimeEnabled: Boolean(state?.runtimeEnabled),
-    storageKey: typeof cfgMgr?.getStorageKey === "function" ? cfgMgr.getStorageKey() : "",
-    official: {
-      completionUrl: normalizeString(off.completionUrl),
-      apiTokenSet: Boolean(normalizeString(off.apiToken))
-    },
-    providers: providers.map((p) => ({
-      id: normalizeString(p?.id) || "(unknown)",
-      type: normalizeString(p?.type),
-      baseUrl: normalizeString(p?.baseUrl),
-      defaultModel: normalizeString(p?.defaultModel),
-      modelsCount: Array.isArray(p?.models) ? p.models.filter((m) => normalizeString(m)).length : 0,
-      apiKeySet: Boolean(normalizeString(p?.apiKey)),
-      headersCount: p?.headers && typeof p.headers === "object" && !Array.isArray(p.headers) ? Object.keys(p.headers).length : 0,
-      authSet: Boolean(normalizeString(p?.apiKey)) || hasAuthHeader(p?.headers)
-    }))
-  };
-}
 
 function post(panel, msg) {
   try {
@@ -47,7 +23,7 @@ function postStatus(panel, status) {
 }
 
 function postRender(panel, cfgMgr, state) {
-  post(panel, { type: "render", config: cfgMgr.get(), summary: summarizeRuntime({ cfgMgr, state }) });
+  post(panel, { type: "render", config: cfgMgr.get(), runtimeEnabled: Boolean(state?.runtimeEnabled) });
 }
 
 function createHandlers({ vscode, ctx, cfgMgr, state, panel }) {
@@ -118,6 +94,39 @@ function createHandlers({ vscode, ctx, cfgMgr, state, panel }) {
         const m = err instanceof Error ? err.message : String(err);
         warn("panel save failed:", m);
         postStatus(panel, `Save failed: ${m}`);
+      }
+      postRender(panel, cfgMgr, state);
+    },
+    exportConfig: async (msg) => {
+      const cfg = msg && typeof msg === "object" && msg.config && typeof msg.config === "object" ? msg.config : cfgMgr.get();
+      try {
+        await runIoWithUiErrorBoundary(async () => {
+          const r = await exportConfigWithDialog({ vscode, cfg, defaultFileName: "augment-byok.config.json" });
+          if (!r.ok) {
+            postStatus(panel, "Export canceled.");
+            return;
+          }
+          postStatus(panel, "Exported (OK).");
+        });
+      } catch (err) {
+        const m = err instanceof Error ? err.message : String(err);
+        postStatus(panel, `Export failed: ${m}`);
+      }
+    },
+    importConfig: async (msg) => {
+      const dirty = Boolean(msg && typeof msg === "object" && msg.dirty === true);
+      try {
+        await runIoWithUiErrorBoundary(async () => {
+          const r = await importConfigWithDialog({ vscode, cfgMgr, requireConfirm: dirty, preserveSecretsByDefault: true });
+          if (!r.ok) {
+            postStatus(panel, "Import canceled.");
+            return;
+          }
+          postStatus(panel, "Imported (OK).");
+        });
+      } catch (err) {
+        const m = err instanceof Error ? err.message : String(err);
+        postStatus(panel, `Import failed: ${m}`);
       }
       postRender(panel, cfgMgr, state);
     },
@@ -254,7 +263,7 @@ async function openConfigPanel({ vscode, ctx, cfgMgr, state }) {
     vscode,
     webview: panel.webview,
     ctx,
-    init: { config: cfgMgr.get(), summary: summarizeRuntime({ cfgMgr, state }) }
+    init: { config: cfgMgr.get(), runtimeEnabled: Boolean(state?.runtimeEnabled) }
   });
 
   const handlers = createHandlers({ vscode, ctx, cfgMgr, state, panel });

@@ -127,6 +127,8 @@ function buildSystemPrompt(req) {
   const rulesText = coerceRulesText(req.rules);
   if (rulesText) parts.push(rulesText);
   if (normalizeString(req.agent_memories)) parts.push(req.agent_memories.trim());
+  const byokSystem = normalizeString(req.byok_system_prompt ?? req.byokSystemPrompt ?? req.byok_system ?? req.byokSystem);
+  if (byokSystem) parts.push(byokSystem.trim());
   if (normalizeString(req.mode).toUpperCase() === "AGENT") parts.push("You are an AI coding assistant with access to tools. Use tools when needed to complete tasks.");
   if (normalizeString(req.lang)) parts.push(`The user is working with ${req.lang.trim()} code.`);
   if (normalizeString(req.path)) parts.push(`Current file path: ${req.path.trim()}`);

@@ -13,6 +13,7 @@
     !dom ||
     typeof dom.applyProvidersEditsFromDom !== "function" ||
     typeof dom.applyRulesEditsFromDom !== "function" ||
+    typeof dom.applyPromptsEditsFromDom !== "function" ||
     typeof dom.gatherSelfTestProviderKeysFromDom !== "function"
   ) {
     throw new Error("BYOK panel init failed (missing dom helpers)");
@@ -56,9 +57,7 @@
   }
 
   const persisted = getPersistedState();
-  const persistedSideCollapsed = persisted && typeof persisted === "object" ? Boolean(persisted.sideCollapsed) : false;
-  const persistedEndpointSearch =
-    persisted && typeof persisted === "object" ? normalizeStr(persisted.endpointSearch) || normalizeStr(persisted.routingAddSearch) : "";
+  const persistedEndpointSearch = persisted && typeof persisted === "object" ? normalizeStr(persisted.endpointSearch) : "";
   const persistedProviderExpanded =
     persisted && typeof persisted === "object" && persisted.providerExpanded && typeof persisted.providerExpanded === "object" && !Array.isArray(persisted.providerExpanded)
       ? persisted.providerExpanded
@@ -70,7 +69,7 @@
 
   let uiState = {
     cfg: {},
-    summary: {},
+    runtimeEnabled: false,
     status: "Ready.",
     clearOfficialToken: false,
     officialTest: { running: false, ok: null, text: "" },
@@ -79,7 +78,6 @@
     dirty: false,
     selfTest: { running: false, logs: [], report: null },
     selfTestProviderKeys: persistedSelfTestProviderKeys,
-    sideCollapsed: persistedSideCollapsed,
     endpointSearch: persistedEndpointSearch
   };
 
@@ -156,17 +154,7 @@
       "render",
       () => {
         const app = qs("#app");
-        const prevMain = app?.querySelector ? app.querySelector(".main") : null;
-        const prevSide = app?.querySelector ? app.querySelector(".side") : null;
-        const mainScrollTop = prevMain ? prevMain.scrollTop : 0;
-        const sideScrollTop = prevSide ? prevSide.scrollTop : 0;
-
         if (app) app.innerHTML = renderApp(uiState);
-
-        const nextMain = app?.querySelector ? app.querySelector(".main") : null;
-        const nextSide = app?.querySelector ? app.querySelector(".side") : null;
-        if (nextMain) nextMain.scrollTop = mainScrollTop;
-        if (nextSide) nextSide.scrollTop = sideScrollTop;
 
         applyEndpointFilter();
       },
@@ -191,6 +179,8 @@
           cfg.historySummary.providerId = parsedHsModel.providerId;
           cfg.historySummary.model = parsedHsModel.modelId;
         }
+        const hsPrompt = qs("#historySummaryPrompt");
+        if (hsPrompt) cfg.historySummary.prompt = normalizeStr(hsPrompt.value);
 
         cfg.routing = cfg.routing && typeof cfg.routing === "object" ? cfg.routing : {};
 
@@ -203,6 +193,7 @@
 
         dom.applyProvidersEditsFromDom(cfg);
         dom.applyRulesEditsFromDom(cfg);
+        dom.applyPromptsEditsFromDom(cfg);
 
         cfg.routing = cfg.routing && typeof cfg.routing === "object" ? cfg.routing : {};
         cfg.routing.rules = cfg.routing.rules && typeof cfg.routing.rules === "object" ? cfg.routing.rules : {};
@@ -232,7 +223,6 @@
       } catch {}
     }
     uiState = { ...uiState, ...(patch || {}) };
-    if (patch && typeof patch === "object" && "sideCollapsed" in patch) setPersistedState({ sideCollapsed: Boolean(uiState.sideCollapsed) });
     render();
   }
 

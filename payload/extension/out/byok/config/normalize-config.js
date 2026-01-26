@@ -19,23 +19,14 @@ function isValidHistorySummaryTemplateNewMode(template) {
   return required.every((p) => s.includes(p));
 }
 
-function get(obj, keys) {
-  for (const k of keys) {
-    if (obj && typeof obj === "object" && Object.prototype.hasOwnProperty.call(obj, k)) return obj[k];
-  }
-  return undefined;
+function asObject(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : null;
 }
 
 function normalizeMode(v) {
   const s = normalizeString(v);
   if (s === "byok" || s === "official" || s === "disabled") return s;
   return "";
-}
-
-function extractLegacyTelemetryDisabledEndpoints(raw) {
-  const telemetry = get(raw, ["telemetry"]);
-  const disabledEndpoints = get(telemetry, ["disabled_endpoints", "disabledEndpoints"]);
-  return Array.isArray(disabledEndpoints) ? disabledEndpoints.map(normalizeEndpoint).filter(Boolean) : [];
 }
 
 function sanitizeUserJson(value, ctx) {
@@ -63,63 +54,79 @@ function normalizeConfig(raw) {
   if (!safeRaw || typeof safeRaw !== "object" || Array.isArray(safeRaw)) return out;
   raw = safeRaw;
 
-  const version = get(raw, ["version"]);
-  if (Number.isFinite(Number(version)) && Number(version) > 0) out.version = Number(version);
+  const version = Number(raw.version);
+  if (Number.isFinite(version) && version > 0) out.version = version;
 
-  const official = get(raw, ["official"]);
-  const completionUrl = normalizeString(get(official, ["completion_url", "completionUrl"]));
-  if (completionUrl) out.official.completionUrl = completionUrl;
-  const apiToken = normalizeString(get(official, ["api_token", "apiToken"]));
-  if (apiToken) out.official.apiToken = apiToken;
+  const official = asObject(raw.official);
+  if (official) {
+    const completionUrl = normalizeString(official.completionUrl);
+    if (completionUrl) out.official.completionUrl = completionUrl;
+    const apiToken = normalizeString(official.apiToken);
+    if (apiToken) out.official.apiToken = apiToken;
+  }
 
-  const legacyTelemetryDisabledEndpoints = extractLegacyTelemetryDisabledEndpoints(raw);
+  const prompts = asObject(raw.prompts);
+  if (prompts) {
+    out.prompts = out.prompts && typeof out.prompts === "object" && !Array.isArray(out.prompts) ? out.prompts : {};
+    out.prompts.endpointSystem =
+      out.prompts.endpointSystem && typeof out.prompts.endpointSystem === "object" && !Array.isArray(out.prompts.endpointSystem)
+        ? out.prompts.endpointSystem
+        : {};
 
-  const historySummary = get(raw, ["history_summary", "historySummary"]);
-  if (historySummary && typeof historySummary === "object" && !Array.isArray(historySummary)) {
+    const endpointSystem = asObject(prompts.endpointSystem);
+    if (endpointSystem) {
+      for (const [k, v] of Object.entries(endpointSystem)) {
+        const ep = normalizeEndpoint(k);
+        const text = normalizeString(v);
+        if (!ep || !text) continue;
+        out.prompts.endpointSystem[ep] = text;
+      }
+    }
+  }
+
+  const historySummary = asObject(raw.historySummary);
+  if (historySummary) {
     const hs = out.historySummary;
-    const enabled = get(historySummary, ["enabled"]);
+    const enabled = historySummary.enabled;
     if (typeof enabled === "boolean") hs.enabled = enabled;
-    const providerId = normalizeString(get(historySummary, ["provider_id", "providerId"]));
+    const providerId = normalizeString(historySummary.providerId);
     if (providerId) hs.providerId = providerId;
-    const model = normalizeString(get(historySummary, ["model"]));
+    const model = normalizeString(historySummary.model);
     if (model) hs.model = model;
-    const maxTokens = get(historySummary, ["max_tokens", "maxTokens"]);
+    const maxTokens = historySummary.maxTokens;
     if (Number.isFinite(Number(maxTokens)) && Number(maxTokens) > 0) hs.maxTokens = Math.floor(Number(maxTokens));
-    const timeoutSeconds = get(historySummary, ["timeout_seconds", "timeoutSeconds"]);
+    const timeoutSeconds = historySummary.timeoutSeconds;
     if (Number.isFinite(Number(timeoutSeconds)) && Number(timeoutSeconds) > 0) hs.timeoutSeconds = Math.floor(Number(timeoutSeconds));
-    const triggerOnHistorySizeChars = get(historySummary, ["trigger_on_history_size_chars", "triggerOnHistorySizeChars"]);
+    const triggerOnHistorySizeChars = historySummary.triggerOnHistorySizeChars;
     if (Number.isFinite(Number(triggerOnHistorySizeChars)) && Number(triggerOnHistorySizeChars) > 0)
       hs.triggerOnHistorySizeChars = Math.floor(Number(triggerOnHistorySizeChars));
-    const triggerStrategy = normalizeString(get(historySummary, ["trigger_strategy", "triggerStrategy"]));
+    const triggerStrategy = normalizeString(historySummary.triggerStrategy);
     if (triggerStrategy) hs.triggerStrategy = triggerStrategy;
-    const triggerOnContextRatio = get(historySummary, ["trigger_on_context_ratio", "triggerOnContextRatio"]);
+    const triggerOnContextRatio = historySummary.triggerOnContextRatio;
     if (Number.isFinite(Number(triggerOnContextRatio)) && Number(triggerOnContextRatio) > 0) hs.triggerOnContextRatio = Number(triggerOnContextRatio);
-    const targetContextRatio = get(historySummary, ["target_context_ratio", "targetContextRatio"]);
+    const targetContextRatio = historySummary.targetContextRatio;
     if (Number.isFinite(Number(targetContextRatio)) && Number(targetContextRatio) > 0) hs.targetContextRatio = Number(targetContextRatio);
-    const contextWindowTokensDefault = get(historySummary, ["context_window_tokens_default", "contextWindowTokensDefault"]);
+    const contextWindowTokensDefault = historySummary.contextWindowTokensDefault;
     if (Number.isFinite(Number(contextWindowTokensDefault)) && Number(contextWindowTokensDefault) >= 0)
       hs.contextWindowTokensDefault = Math.floor(Number(contextWindowTokensDefault));
-    const contextWindowTokensOverrides = get(historySummary, ["context_window_tokens_overrides", "contextWindowTokensOverrides"]);
+    const contextWindowTokensOverrides = historySummary.contextWindowTokensOverrides;
     if (contextWindowTokensOverrides && typeof contextWindowTokensOverrides === "object" && !Array.isArray(contextWindowTokensOverrides))
       hs.contextWindowTokensOverrides = contextWindowTokensOverrides;
-    const historyTailSizeCharsToExclude = get(historySummary, ["history_tail_size_chars_to_exclude", "historyTailSizeCharsToExclude"]);
+    const historyTailSizeCharsToExclude = historySummary.historyTailSizeCharsToExclude;
     if (Number.isFinite(Number(historyTailSizeCharsToExclude)) && Number(historyTailSizeCharsToExclude) >= 0)
       hs.historyTailSizeCharsToExclude = Math.floor(Number(historyTailSizeCharsToExclude));
-    const minTailExchanges = get(historySummary, ["min_tail_exchanges", "minTailExchanges"]);
+    const minTailExchanges = historySummary.minTailExchanges;
     if (Number.isFinite(Number(minTailExchanges)) && Number(minTailExchanges) > 0) hs.minTailExchanges = Math.floor(Number(minTailExchanges));
-    const cacheTtlMs = get(historySummary, ["cache_ttl_ms", "cacheTtlMs"]);
+    const cacheTtlMs = historySummary.cacheTtlMs;
     if (Number.isFinite(Number(cacheTtlMs)) && Number(cacheTtlMs) >= 0) hs.cacheTtlMs = Math.floor(Number(cacheTtlMs));
-    const maxSummarizationInputChars = get(historySummary, ["max_summarization_input_chars", "maxSummarizationInputChars"]);
+    const maxSummarizationInputChars = historySummary.maxSummarizationInputChars;
     if (Number.isFinite(Number(maxSummarizationInputChars)) && Number(maxSummarizationInputChars) >= 0)
       hs.maxSummarizationInputChars = Math.floor(Number(maxSummarizationInputChars));
-    const prompt = typeof get(historySummary, ["prompt"]) === "string" ? get(historySummary, ["prompt"]) : "";
+    const prompt = typeof historySummary.prompt === "string" ? historySummary.prompt : "";
     if (normalizeString(prompt)) hs.prompt = prompt;
-    const rollingSummary = get(historySummary, ["rolling_summary", "rollingSummary"]);
+    const rollingSummary = historySummary.rollingSummary;
     if (typeof rollingSummary === "boolean") hs.rollingSummary = rollingSummary;
-    const template =
-      typeof get(historySummary, ["summary_node_request_message_template", "summaryNodeRequestMessageTemplate"]) === "string"
-        ? get(historySummary, ["summary_node_request_message_template", "summaryNodeRequestMessageTemplate"])
-        : "";
+    const template = typeof historySummary.summaryNodeRequestMessageTemplate === "string" ? historySummary.summaryNodeRequestMessageTemplate : "";
     if (normalizeString(template)) {
       if (!isValidHistorySummaryTemplateNewMode(template)) {
         warn(
@@ -129,41 +136,42 @@ function normalizeConfig(raw) {
         hs.summaryNodeRequestMessageTemplate = template;
       }
     }
-    const abridgedHistoryParams = get(historySummary, ["abridged_history_params", "abridgedHistoryParams"]);
-    if (abridgedHistoryParams && typeof abridgedHistoryParams === "object" && !Array.isArray(abridgedHistoryParams)) {
+    const abridgedHistoryParams = asObject(historySummary.abridgedHistoryParams);
+    if (abridgedHistoryParams) {
       const p = hs.abridgedHistoryParams;
-      const totalCharsLimit = get(abridgedHistoryParams, ["total_chars_limit", "totalCharsLimit"]);
+      const totalCharsLimit = abridgedHistoryParams.totalCharsLimit;
       if (Number.isFinite(Number(totalCharsLimit)) && Number(totalCharsLimit) > 0) p.totalCharsLimit = Math.floor(Number(totalCharsLimit));
-      const userMessageCharsLimit = get(abridgedHistoryParams, ["user_message_chars_limit", "userMessageCharsLimit"]);
+      const userMessageCharsLimit = abridgedHistoryParams.userMessageCharsLimit;
       if (Number.isFinite(Number(userMessageCharsLimit)) && Number(userMessageCharsLimit) > 0) p.userMessageCharsLimit = Math.floor(Number(userMessageCharsLimit));
-      const agentResponseCharsLimit = get(abridgedHistoryParams, ["agent_response_chars_limit", "agentResponseCharsLimit"]);
+      const agentResponseCharsLimit = abridgedHistoryParams.agentResponseCharsLimit;
       if (Number.isFinite(Number(agentResponseCharsLimit)) && Number(agentResponseCharsLimit) > 0) p.agentResponseCharsLimit = Math.floor(Number(agentResponseCharsLimit));
-      const actionCharsLimit = get(abridgedHistoryParams, ["action_chars_limit", "actionCharsLimit"]);
+      const actionCharsLimit = abridgedHistoryParams.actionCharsLimit;
       if (Number.isFinite(Number(actionCharsLimit)) && Number(actionCharsLimit) > 0) p.actionCharsLimit = Math.floor(Number(actionCharsLimit));
-      const numFilesModifiedLimit = get(abridgedHistoryParams, ["num_files_modified_limit", "numFilesModifiedLimit"]);
+      const numFilesModifiedLimit = abridgedHistoryParams.numFilesModifiedLimit;
       if (Number.isFinite(Number(numFilesModifiedLimit)) && Number(numFilesModifiedLimit) > 0) p.numFilesModifiedLimit = Math.floor(Number(numFilesModifiedLimit));
-      const numFilesCreatedLimit = get(abridgedHistoryParams, ["num_files_created_limit", "numFilesCreatedLimit"]);
+      const numFilesCreatedLimit = abridgedHistoryParams.numFilesCreatedLimit;
       if (Number.isFinite(Number(numFilesCreatedLimit)) && Number(numFilesCreatedLimit) > 0) p.numFilesCreatedLimit = Math.floor(Number(numFilesCreatedLimit));
-      const numFilesDeletedLimit = get(abridgedHistoryParams, ["num_files_deleted_limit", "numFilesDeletedLimit"]);
+      const numFilesDeletedLimit = abridgedHistoryParams.numFilesDeletedLimit;
       if (Number.isFinite(Number(numFilesDeletedLimit)) && Number(numFilesDeletedLimit) > 0) p.numFilesDeletedLimit = Math.floor(Number(numFilesDeletedLimit));
-      const numFilesViewedLimit = get(abridgedHistoryParams, ["num_files_viewed_limit", "numFilesViewedLimit"]);
+      const numFilesViewedLimit = abridgedHistoryParams.numFilesViewedLimit;
       if (Number.isFinite(Number(numFilesViewedLimit)) && Number(numFilesViewedLimit) > 0) p.numFilesViewedLimit = Math.floor(Number(numFilesViewedLimit));
-      const numTerminalCommandsLimit = get(abridgedHistoryParams, ["num_terminal_commands_limit", "numTerminalCommandsLimit"]);
+      const numTerminalCommandsLimit = abridgedHistoryParams.numTerminalCommandsLimit;
       if (Number.isFinite(Number(numTerminalCommandsLimit)) && Number(numTerminalCommandsLimit) > 0) p.numTerminalCommandsLimit = Math.floor(Number(numTerminalCommandsLimit));
     }
   }
 
-  const routing = get(raw, ["routing"]);
+  const routing = asObject(raw.routing);
 
-  const rules = get(routing, ["rules"]);
-  if (rules && typeof rules === "object" && !Array.isArray(rules)) {
+  const rules = asObject(routing?.rules);
+  if (rules) {
     for (const [k, v] of Object.entries(rules)) {
       const ep = normalizeEndpoint(k);
       if (!ep) continue;
       const hadDefault = Object.prototype.hasOwnProperty.call(out.routing.rules, ep);
-      const mode = normalizeMode(get(v, ["mode"])) || "official";
-      let providerId = normalizeString(get(v, ["provider_id", "providerId"]));
-      let model = normalizeString(get(v, ["model"]));
+      const r = asObject(v);
+      const mode = normalizeMode(r?.mode) || "official";
+      let providerId = normalizeString(r?.providerId);
+      let model = normalizeString(r?.model);
       if (mode !== "byok") {
         providerId = "";
         model = "";
@@ -173,34 +181,20 @@ function normalizeConfig(raw) {
     }
   }
 
-  // legacy: telemetry.disabledEndpoints（已弃用）→ routing.rules[*].mode=disabled
-  // 需要覆盖 rules 中显式设置，以保持旧语义（telemetry 优先级更高）。
-  if (legacyTelemetryDisabledEndpoints.length) {
-    out.routing = out.routing && typeof out.routing === "object" ? out.routing : {};
-    out.routing.rules = out.routing.rules && typeof out.routing.rules === "object" ? out.routing.rules : {};
-    for (const ep of legacyTelemetryDisabledEndpoints) {
-      if (!ep) continue;
-      const r =
-        out.routing.rules[ep] && typeof out.routing.rules[ep] === "object" ? out.routing.rules[ep] : (out.routing.rules[ep] = {});
-      r.mode = "disabled";
-      r.providerId = "";
-      r.model = "";
-    }
-  }
-
-  const providers = get(raw, ["providers"]);
+  const providers = raw.providers;
   if (Array.isArray(providers)) {
     out.providers = providers
       .map((p) => {
-        if (!p || typeof p !== "object" || Array.isArray(p)) return null;
-        const id = normalizeString(get(p, ["id"]));
-        const type = normalizeString(get(p, ["type"]));
-        const baseUrl = normalizeString(get(p, ["base_url", "baseUrl"]));
-        const apiKey = normalizeString(get(p, ["api_key", "apiKey"]));
-        const defaultModel = normalizeString(get(p, ["default_model", "defaultModel"]));
-        const models = normalizeStringList(get(p, ["models"]), { maxItems: 10000 });
-        const headers = get(p, ["headers"]);
-        const requestDefaults = get(p, ["request_defaults", "requestDefaults"]);
+        const rec = asObject(p);
+        if (!rec) return null;
+        const id = normalizeString(rec.id);
+        const type = normalizeString(rec.type);
+        const baseUrl = normalizeString(rec.baseUrl);
+        const apiKey = normalizeString(rec.apiKey);
+        const defaultModel = normalizeString(rec.defaultModel);
+        const models = normalizeStringList(rec.models, { maxItems: 10000 });
+        const headers = rec.headers;
+        const requestDefaults = rec.requestDefaults;
         if (!id || !type) return null;
 
         const finalModels = models.length ? models : defaultModel ? [defaultModel] : [];
@@ -223,5 +217,4 @@ function normalizeConfig(raw) {
   return out;
 }
 
-module.exports = { normalizeConfig, extractLegacyTelemetryDisabledEndpoints };
-
+module.exports = { normalizeConfig };

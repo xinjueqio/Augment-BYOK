@@ -3,7 +3,7 @@
 const { normalizeString } = require("../infra/util");
 const { truncate, fmtSection, fmtCodeSection, historyToMessages, extractDirectives, buildSystem, extractCodeContext } = require("./common");
 
-function buildSmartPasteStreamPrompt(body) {
+function buildSmartPasteStreamPrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const directives = extractDirectives(b);
   const lang = normalizeString(b.lang);
@@ -18,6 +18,7 @@ function buildSmartPasteStreamPrompt(body) {
   const system = buildSystem({
     purpose: "smart-paste-stream",
     directives,
+    extraSystem,
     outputConstraints:
       "Integrate the pasted code into the target context.\n- Output ONLY the final code to replace the selected range\n- No markdown, no explanations\n- Do NOT wrap in ``` code fences"
   });

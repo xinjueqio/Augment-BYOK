@@ -1,18 +1,18 @@
 "use strict";
 
 const { normalizeString } = require("../infra/util");
-const { fmtSection, fmtCodeSection, buildSystem } = require("./common");
+const { fmtSection, fmtCodeSection, buildPurposeSystem } = require("./common");
 
-function buildCompletionPrompt(body) {
+function buildCompletionPrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const lang = normalizeString(b.lang);
   const path = normalizeString(b.path);
   const prompt = typeof b.prompt === "string" ? b.prompt : "";
   const suffix = typeof b.suffix === "string" ? b.suffix : "";
 
-  const system = buildSystem({
+  const system = buildPurposeSystem({
     purpose: "completion",
-    directives: { userGuidelines: "", workspaceGuidelines: "", rulesText: "" },
+    extraSystem,
     outputConstraints: "You are a code completion engine. Output ONLY the completion text.\n- No markdown, no explanations\n- Do NOT wrap in ``` code fences"
   });
 

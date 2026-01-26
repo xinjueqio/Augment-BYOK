@@ -50,11 +50,10 @@
 
   ns.renderApp = function renderApp({
     cfg,
-    summary,
+    runtimeEnabled,
     status,
     modal,
     dirty,
-    sideCollapsed,
     endpointSearch,
     selfTest,
     selfTestProviderKeys,
@@ -62,7 +61,6 @@
     providerExpanded
   }) {
     const c = cfg && typeof cfg === "object" ? cfg : {};
-    const s = summary && typeof summary === "object" ? summary : {};
     const off = c.official && typeof c.official === "object" ? c.official : {};
     const endpointSearchText = normalizeStr(endpointSearch);
 
@@ -103,7 +101,7 @@
       : `<div class="text-muted text-xs">(no providers configured)</div>`;
 
     const isDirty = dirty === true;
-    const runtimeEnabled = s.runtimeEnabled === true;
+    const runtimeEnabledFlag = runtimeEnabled === true;
 
     const otUi = computeOfficialTestUi(officialTest);
     const otRunning = otUi.running;
@@ -152,7 +150,7 @@
 
     const headerBadges = [
       `<span class="status-badge">schema v1</span>`,
-      runtimeEnabled ? `<span class="status-badge status-badge--success">BYOK: ON</span>` : `<span class="status-badge status-badge--warning">BYOK: OFF</span>`,
+      runtimeEnabledFlag ? `<span class="status-badge status-badge--success">BYOK: ON</span>` : `<span class="status-badge status-badge--warning">BYOK: OFF</span>`,
       `<span class="status-badge${isDirty ? " status-badge--warning" : " status-badge--success"}" id="dirtyBadge">${isDirty ? "pending" : "saved"}</span>`
     ].join("");
 
@@ -168,9 +166,11 @@
 	        </div>
 	        <div class="header-actions flex-row flex-wrap">
 	          <label class="checkbox-wrapper" title="开启或关闭 BYOK 运行时（关闭=回滚到官方）">
-	            <input type="checkbox" id="runtimeEnabledToggle" ${runtimeEnabled ? "checked" : ""} />
+	            <input type="checkbox" id="runtimeEnabledToggle" ${runtimeEnabledFlag ? "checked" : ""} />
 	            <span>启用 BYOK</span>
 	          </label>
+	          <button class="btn btn--small" data-action="importConfig" title="从 JSON 文件导入配置（会覆盖当前配置）">导入</button>
+	          <button class="btn btn--small" data-action="exportConfig" title="导出当前配置到 JSON 文件（可选择是否包含密钥）">导出</button>
 	          <button class="btn btn--small" data-action="reload" title="重新加载配置（丢弃未保存修改）">刷新</button>
 	          <button class="btn btn--small btn--primary" data-action="save" title="保存配置到 extension storage">保存</button>
 	          <button class="btn btn--small" data-action="reset" title="重置为默认配置（会清空已存储的 token/key）">重置</button>
@@ -185,7 +185,9 @@
       ? `<span class="status-badge status-badge--success">url: ok</span>`
       : `<span class="status-badge status-badge--error">url: invalid</span>`;
     const tokenSet = Boolean(normalizeStr(off.apiToken));
-    const tokenBadge = tokenSet ? `<span class="status-badge status-badge--success">token: set</span>` : `<span class="status-badge status-badge--warning">token: empty</span>`;
+    const tokenBadge = tokenSet
+      ? `<span class="status-badge status-badge--success">token: set</span>`
+      : `<span class="status-badge status-badge--warning">token: empty (optional)</span>`;
 
     const official = `
 	      <section class="settings-panel">
@@ -206,7 +208,7 @@
 	            <div class="form-group">
 	              <label class="form-label" for="officialCompletionUrl">Completion URL</label>
 	              <input type="url" id="officialCompletionUrl" value="${escapeHtml(off.completionUrl ?? "")}" placeholder="https://&lt;tenant&gt;.augmentcode.com/" />
-	              <div class="text-muted text-xs">用于官方 upstream 路由 + <span class="text-mono">/get-models</span> 合并。</div>
+	              <div class="text-muted text-xs">默认官方；私有租户填你的域名。用于官方上下文注入 + <span class="text-mono">/get-models</span> 合并。</div>
 	            </div>
 	            <div class="form-group">
 	              <div class="flex-between flex-row">
@@ -217,7 +219,7 @@
 	                <input type="password" id="officialApiToken" value="" placeholder="${off.apiToken ? "(set)" : "(empty)"}" />
 	                <button class="btn btn--icon btn--danger" data-action="clearOfficialToken" title="清空 Token">✕</button>
 	              </div>
-	              <div class="text-muted text-xs">留空=不改；点击 ✕=清空（保存后生效）。</div>
+	              <div class="text-muted text-xs">可选：私有租户/需要官方注入才需配置。留空=不改；点击 ✕=清空（保存后生效）。</div>
 	            </div>
 	          </div>
 	        </div>
@@ -234,6 +236,7 @@
     const hsProviderId = normalizeStr(historySummary.providerId);
     const hsModel = normalizeStr(historySummary.model);
     const hsByokModel = hsProviderId && hsModel ? `byok:${hsProviderId}:${hsModel}` : "";
+    const hsPrompt = normalizeStr(historySummary.prompt);
     const hsModelGroups = providers
       .map((p) => {
         const pid = normalizeStr(p?.id);
@@ -284,10 +287,36 @@
 	                <span class="text-muted text-xs">仅清理后台摘要复用缓存，不影响 UI 历史显示。</span>
 	              </div>
 	            </div>
+              <div class="form-group form-grid--full">
+                <details class="endpoint-group">
+                  <summary class="endpoint-group-summary">
+                    <span>Advanced</span>
+                    <span class="row" style="gap:6px;">
+                      <span class="badge">prompt</span>
+                    </span>
+                  </summary>
+                  <div class="endpoint-group-body">
+                    <div class="text-muted text-xs">用于生成“滚动摘要”的 prompt（保存后对后续摘要生效）。</div>
+                    <div style="height:10px;"></div>
+                    <div class="form-grid">
+                      <div class="form-group form-grid--full">
+                        <label class="form-label" for="historySummaryPrompt">Prompt</label>
+                        <textarea class="mono" id="historySummaryPrompt" rows="6" placeholder="(default)">${escapeHtml(hsPrompt)}</textarea>
+                        <div class="text-muted text-xs">建议保持简洁、结构化；避免泄漏敏感信息。留空会回落默认模板。</div>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              </div>
 	          </div>
 	        </div>
 	      </section>
 	    `;
+
+    const promptsHtml =
+      typeof ns.renderPromptsPanel === "function"
+        ? ns.renderPromptsPanel({ cfg: c })
+        : `<div class="text-muted text-xs">prompts renderer missing</div>`;
 
     const endpointRules =
       typeof ns.renderEndpointRulesPanel === "function"
@@ -344,26 +373,17 @@
 	            `;
               })();
 
-    // Keep signature parity with older callers.
-    void sideCollapsed;
-
     return `
 	      <div class="app-container">
 	        ${appHeader}
 	        ${official}
 	        ${providersHtml}
 	        ${historySummaryHtml}
+	        ${promptsHtml}
 	        ${endpointRules}
 	        ${selfTestHtml}
-	        <section class="settings-panel">
-	          <header class="settings-panel__header">
-	            <span>Summary</span>
-	          </header>
-	          <div class="settings-panel__body">${ns.summarizeSummaryBox(summary)}</div>
-	        </section>
 	      </div>
 	      ${modalHtml}
 	    `;
   };
 })();
-

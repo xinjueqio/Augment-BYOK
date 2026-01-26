@@ -3,7 +3,7 @@
 const { normalizeString } = require("../infra/util");
 const { fmtSection, fmtCodeSection, historyToMessages, extractDirectives, buildSystem, extractCodeContext } = require("./common");
 
-function buildInstructionStreamPrompt(body) {
+function buildInstructionStreamPrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const directives = extractDirectives(b);
   const lang = normalizeString(b.lang);
@@ -14,6 +14,7 @@ function buildInstructionStreamPrompt(body) {
   const system = buildSystem({
     purpose: "instruction-stream",
     directives,
+    extraSystem,
     outputConstraints:
       "Output ONLY the final replacement code for the selected range.\n- No markdown, no explanations\n- Do NOT wrap in ``` code fences\n- Stream plain code text only"
   });

@@ -3,7 +3,7 @@
 const { debug, warn } = require("../infra/log");
 const { normalizeString } = require("../infra/util");
 const { defaultConfig } = require("./default-config");
-const { normalizeConfig, extractLegacyTelemetryDisabledEndpoints } = require("./normalize-config");
+const { normalizeConfig } = require("./normalize-config");
 
 const CONFIG_KEY = "augment-byok.config.v1";
 
@@ -50,12 +50,6 @@ class ConfigManager {
       this.lastGood = cfg;
       this.lastError = null;
 
-      const legacyTelemetry = extractLegacyTelemetryDisabledEndpoints(raw);
-      if (legacyTelemetry.length && typeof ctx.globalState.update === "function") {
-        void ctx.globalState.update(CONFIG_KEY, cfg).catch(() => {});
-        debug("config migrated: telemetry.disabledEndpoints -> routing.rules[].mode=disabled");
-      }
-
       debug(`config loaded (${reason})`);
       return { ok: true };
     } catch (err) {
@@ -91,4 +85,3 @@ function createConfigManager(opts) {
 }
 
 module.exports = { defaultConfig, normalizeConfig, createConfigManager };
-

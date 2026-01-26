@@ -123,7 +123,6 @@ async function* anthropicChatStreamChunks({ baseUrl, apiKey, model, system, mess
   const getToolMeta = makeToolMetaGetter(toolMetaByName);
 
   let nodeId = 0;
-  let fullText = "";
   let stopReason = null;
   let stopReasonSeen = false;
   let sawToolUse = false;
@@ -171,7 +170,6 @@ async function* anthropicChatStreamChunks({ baseUrl, apiKey, model, system, mess
       const dt = normalizeString(delta?.type);
       if (dt === "text_delta" && typeof delta?.text === "string" && delta.text) {
         const t = delta.text;
-        fullText += t;
         nodeId += 1;
         emittedChunks += 1;
         yield makeBackChatChunk({ text: t, nodes: [rawResponseNode({ id: nodeId, content: t })] });
@@ -261,7 +259,7 @@ async function* anthropicChatStreamChunks({ baseUrl, apiKey, model, system, mess
   nodeId = usageBuilt.nodeId;
   if (usageBuilt.chunk) yield usageBuilt.chunk;
 
-  const final = buildFinalChatChunk({ nodeId, fullText, stopReasonSeen, stopReason, sawToolUse });
+  const final = buildFinalChatChunk({ nodeId, stopReasonSeen, stopReason, sawToolUse });
   yield final.chunk;
 }
 

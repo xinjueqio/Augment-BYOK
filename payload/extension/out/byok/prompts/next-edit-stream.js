@@ -20,7 +20,7 @@ function headWithMarker(s, maxChars) {
   return `${text.slice(0, n)}\n…(truncated)`;
 }
 
-function buildNextEditStreamPrompt(body) {
+function buildNextEditStreamPrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const directives = extractDirectives(b);
   const lang = pickLang(b);
@@ -78,6 +78,7 @@ function buildNextEditStreamPrompt(body) {
   const system = buildSystem({
     purpose: "next-edit-stream",
     directives,
+    extraSystem,
     outputConstraints:
       "Propose the next minimal edit.\n- Output ONLY the replacement code for the selected range\n- No markdown, no explanations\n- Do NOT wrap in ``` code fences"
   });

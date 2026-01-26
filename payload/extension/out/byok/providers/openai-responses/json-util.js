@@ -129,7 +129,7 @@ async function* emitOpenAiResponsesJsonAsAugmentChunks(json, { toolMetaByName, s
   nodeId = usageBuilt.nodeId;
   if (usageBuilt.chunk) yield usageBuilt.chunk;
 
-  const final = buildFinalChatChunk({ nodeId, fullText: text, stopReasonSeen: false, stopReason: null, sawToolUse });
+  const final = buildFinalChatChunk({ nodeId, stopReasonSeen: false, stopReason: null, sawToolUse });
   yield final.chunk;
 }
 

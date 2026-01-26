@@ -70,18 +70,6 @@ test("normalizeConfig: routing.rules merges with defaults (and clears provider/m
   assert.equal(cfg2.routing.rules["/chat"].mode, "byok");
 });
 
-test("normalizeConfig: legacy telemetry.disabledEndpoints -> routing.rules[*].mode=disabled (telemetry wins)", () => {
-  const cfg = normalizeConfig({
-    telemetry: { disabledEndpoints: ["/chat", "/not-in-defaults"] },
-    routing: { rules: { "/chat": { mode: "official" } } }
-  });
-
-  assert.equal(cfg.routing.rules["/chat"].mode, "disabled");
-  assert.equal(cfg.routing.rules["/chat"].providerId, "");
-  assert.equal(cfg.routing.rules["/chat"].model, "");
-  assert.equal(cfg.routing.rules["/not-in-defaults"].mode, "disabled");
-});
-
 test("normalizeConfig: provider.models ignores non-string entries", () => {
   const cfg = normalizeConfig({
     providers: [
@@ -96,4 +84,36 @@ test("normalizeConfig: provider.models ignores non-string entries", () => {
   });
 
   assert.deepEqual(cfg.providers[0].models, ["a", "b"]);
+});
+
+test("normalizeConfig: prompts.endpointSystem is normalized and safe", () => {
+  const cfg = normalizeConfig({
+    prompts: {
+      globalSystem: "  GLOBAL  ",
+      endpointSystem: {
+        "/chat": "  CHAT  ",
+        "chat-stream?x=1": "  STREAM  ",
+        "__proto__": { polluted: "yes" }
+      }
+    }
+  });
+
+  assert.equal(Object.prototype.hasOwnProperty.call(cfg.prompts, "globalSystem"), false);
+  assert.equal(cfg.prompts.endpointSystem["/chat"], "CHAT");
+  assert.equal(cfg.prompts.endpointSystem["/chat-stream"], "STREAM");
+  assert.equal(Object.prototype.hasOwnProperty.call(cfg.prompts.endpointSystem, "__proto__"), false);
+  assert.equal(cfg.prompts.endpointSystem.polluted, undefined);
+});
+
+test("normalizeConfig: drops prompts.activePresetId/presets (no prompt sets)", () => {
+  const cfg = normalizeConfig({
+    prompts: {
+      activePresetId: "p1",
+      presets: [{ id: "p1", name: "Preset 1", endpointSystem: { "/chat": "x" } }],
+      endpointSystem: { "/chat": "INLINE" }
+    }
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(cfg.prompts, "activePresetId"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(cfg.prompts, "presets"), false);
+  assert.equal(cfg.prompts.endpointSystem["/chat"], "INLINE");
 });

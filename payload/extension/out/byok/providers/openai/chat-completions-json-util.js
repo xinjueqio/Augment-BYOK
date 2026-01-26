@@ -128,7 +128,7 @@ async function* emitChatCompletionJsonAsAugmentChunks(json, { toolMetaByName, su
   if (usageBuilt.chunk) yield usageBuilt.chunk;
 
   const { stopReason, stopReasonSeen } = extractStopReasonFromChatCompletionJson(obj);
-  const final = buildFinalChatChunk({ nodeId, fullText: text, stopReasonSeen, stopReason, sawToolUse });
+  const final = buildFinalChatChunk({ nodeId, stopReasonSeen, stopReason, sawToolUse });
   yield final.chunk;
 }
 

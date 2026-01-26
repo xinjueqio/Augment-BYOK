@@ -85,7 +85,6 @@ async function* emitGeminiPartsAsAugmentChunks(parts, { nodeIdStart, getToolMeta
   let nodeId = Number(nodeIdStart);
   if (!Number.isFinite(nodeId) || nodeId < 0) nodeId = 0;
 
-  let fullText = "";
   let sawToolUse = false;
   let toolSeq = 0;
 
@@ -95,7 +94,6 @@ async function* emitGeminiPartsAsAugmentChunks(parts, { nodeIdStart, getToolMeta
     const t = textBuf;
     textBuf = "";
     if (!t) return null;
-    fullText += t;
     nodeId += 1;
     return makeBackChatChunk({ text: t, nodes: [rawResponseNode({ id: nodeId, content: t })] });
   };
@@ -128,7 +126,7 @@ async function* emitGeminiPartsAsAugmentChunks(parts, { nodeIdStart, getToolMeta
   const last = flushText();
   if (last) yield last;
 
-  return { nodeId, fullText, sawToolUse };
+  return { nodeId, sawToolUse };
 }
 
 async function* emitGeminiChatJsonAsAugmentChunks(json, { toolMetaByName, supportToolUseStart } = {}) {
@@ -148,7 +146,6 @@ async function* emitGeminiChatJsonAsAugmentChunks(json, { toolMetaByName, suppor
   const emitted = yield* emitGeminiPartsAsAugmentChunks(parts, { nodeIdStart: 0, getToolMeta, supportToolUseStart });
 
   let nodeId = emitted.nodeId;
-  const fullText = emitted.fullText;
   const sawToolUse = emitted.sawToolUse;
 
   const usageBuilt = buildTokenUsageChunk({
@@ -160,13 +157,7 @@ async function* emitGeminiChatJsonAsAugmentChunks(json, { toolMetaByName, suppor
   nodeId = usageBuilt.nodeId;
   if (usageBuilt.chunk) yield usageBuilt.chunk;
 
-  const final = buildFinalChatChunk({
-    nodeId,
-    fullText,
-    stopReasonSeen: stop.stopReasonSeen,
-    stopReason: stop.stopReason,
-    sawToolUse
-  });
+  const final = buildFinalChatChunk({ nodeId, stopReasonSeen: stop.stopReasonSeen, stopReason: stop.stopReason, sawToolUse });
   yield final.chunk;
 }
 

@@ -125,7 +125,7 @@ async function selfTestProvider({ cfg, provider, timeoutMs, abortSignal, log, ca
         selected_text: "foo",
         suffix: "';\nconsole.log(x);\n"
       };
-      const { system, messages } = buildMessagesForEndpoint("/next-edit-stream", body);
+      const { system, messages } = buildMessagesForEndpoint("/next-edit-stream", body, cfg);
       return await completeTextByProvider({ provider, model, system, messages, timeoutMs, abortSignal });
     });
     if (nextEditRes.ok && normalizeString(nextEditRes.res)) {
@@ -148,7 +148,7 @@ async function selfTestProvider({ cfg, provider, timeoutMs, abortSignal, log, ca
           }
         ]
       };
-      const { system, messages } = buildMessagesForEndpoint("/next_edit_loc", body);
+      const { system, messages } = buildMessagesForEndpoint("/next_edit_loc", body, cfg);
       return await completeTextByProvider({ provider, model, system, messages, timeoutMs, abortSignal });
     });
     if (nextEditLocRes.ok && normalizeString(nextEditLocRes.res)) {
@@ -305,4 +305,3 @@ async function selfTestProvider({ cfg, provider, timeoutMs, abortSignal, log, ca
 }
 
 module.exports = { selfTestProvider };
-

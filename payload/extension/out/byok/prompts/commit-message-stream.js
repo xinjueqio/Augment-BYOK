@@ -1,17 +1,17 @@
 "use strict";
 
-const { fmtSection, fmtCodeSection, fmtJsonSection, buildSystem } = require("./common");
+const { fmtSection, fmtCodeSection, fmtJsonSection, buildPurposeSystem } = require("./common");
 
-function buildCommitMessageStreamPrompt(body) {
+function buildCommitMessageStreamPrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const diff = typeof b.diff === "string" ? b.diff : "";
   const stats = b.changed_file_stats ?? b.changedFileStats;
   const relevant = b.relevant_commit_messages ?? b.relevantCommitMessages;
   const examples = b.example_commit_messages ?? b.exampleCommitMessages;
 
-  const system = buildSystem({
+  const system = buildPurposeSystem({
     purpose: "generate-commit-message-stream",
-    directives: { userGuidelines: "", workspaceGuidelines: "", rulesText: "" },
+    extraSystem,
     outputConstraints:
       "Generate ONE concise git commit message subject line.\n- Output ONLY the subject line\n- No quotes, no trailing period\n- Do NOT wrap in ``` code fences"
   });

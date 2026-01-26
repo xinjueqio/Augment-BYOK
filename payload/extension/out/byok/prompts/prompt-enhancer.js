@@ -11,13 +11,14 @@ const {
   extractCodeContext
 } = require("./common");
 
-function buildPromptEnhancerPrompt(body) {
+function buildPromptEnhancerPrompt(body, { extraSystem = "" } = {}) {
   const b = body && typeof body === "object" ? body : {};
   const directives = extractDirectives(b);
 
   const system = buildSystem({
     purpose: "prompt-enhancer",
     directives,
+    extraSystem,
     outputConstraints:
       "Rewrite the prompt to be clearer and more specific.\n- Output ONLY the improved prompt text\n- No preface, no analysis\n- Do NOT wrap in ``` code fences"
   });

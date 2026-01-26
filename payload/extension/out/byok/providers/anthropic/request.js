@@ -111,7 +111,8 @@ function sanitizeAnthropicRequestDefaults(requestDefaults) {
   return out;
 }
 
-function normalizeAnthropicMessagesForRequest(messages) {
+function normalizeAnthropicMessagesForRequest(messages, opts) {
+  const forceTextBlocks = opts && typeof opts === "object" ? opts.forceTextBlocks === true : false;
   const input = Array.isArray(messages) ? messages : [];
   const normalized = [];
   for (const m of input) {
@@ -121,7 +122,7 @@ function normalizeAnthropicMessagesForRequest(messages) {
     const content = m.content;
     if (typeof content === "string") {
       if (!content.trim()) continue;
-      normalized.push({ role, content });
+      normalized.push({ role, content: forceTextBlocks ? buildAnthropicTextBlocks(content) : content });
       continue;
     }
     if (Array.isArray(content)) {
@@ -163,7 +164,17 @@ function dedupeAnthropicTools(tools) {
   return out;
 }
 
-function buildAnthropicRequest({ baseUrl, apiKey, model, system, messages, tools, extraHeaders, requestDefaults, stream, includeToolChoice }) {
+function buildAnthropicTextBlocks(text) {
+  const s = typeof text === "string" ? text.trim() : "";
+  if (!s) return [];
+  return [{ type: "text", text: s }];
+}
+
+function buildAnthropicSystemBlocks(system) {
+  return buildAnthropicTextBlocks(system);
+}
+
+function buildAnthropicRequest({ baseUrl, apiKey, model, system, messages, tools, extraHeaders, requestDefaults, stream, includeToolChoice, systemAsBlocks, messagesAsBlocks }) {
   const url = joinBaseUrl(requireString(baseUrl, "Anthropic baseUrl"), "messages");
   const key = normalizeRawToken(apiKey);
   const extra = extraHeaders && typeof extraHeaders === "object" ? extraHeaders : {};
@@ -171,7 +182,7 @@ function buildAnthropicRequest({ baseUrl, apiKey, model, system, messages, tools
   const m = requireString(model, "Anthropic model");
   const maxTokens = pickMaxTokens(requestDefaults);
   const rd = sanitizeAnthropicRequestDefaults(requestDefaults);
-  const ms = normalizeAnthropicMessagesForRequest(messages);
+  const ms = normalizeAnthropicMessagesForRequest(messages, { forceTextBlocks: messagesAsBlocks === true });
   if (!Array.isArray(ms) || !ms.length) throw new Error("Anthropic messages 为空");
 
   const body = {
@@ -181,7 +192,9 @@ function buildAnthropicRequest({ baseUrl, apiKey, model, system, messages, tools
     messages: ms,
     stream: Boolean(stream)
   };
-  if (typeof system === "string" && system.trim()) body.system = system.trim();
+  if (typeof system === "string" && system.trim()) {
+    body.system = systemAsBlocks === true ? buildAnthropicSystemBlocks(system) : system.trim();
+  }
   const ts = dedupeAnthropicTools(tools);
   if (ts.length) {
     body.tools = ts;
@@ -202,6 +215,21 @@ function formatAttemptLabel(i, labelSuffix) {
   return s ? `retry${i}(${s})` : `retry${i}`;
 }
 
+function isSystemInvalidTypeStringError(errorText) {
+  const t = normalizeString(errorText).toLowerCase();
+  if (!t) return false;
+  return t.includes("system") && t.includes("invalid type") && t.includes("string");
+}
+
+function isMessagesContentInvalidTypeStringError(errorText) {
+  const t = normalizeString(errorText).toLowerCase();
+  if (!t) return false;
+  if (!t.includes("invalid type") || !t.includes("string")) return false;
+  // 常见形态：messages[0].content: invalid type: string
+  // 也可能：messages: ... invalid type: string（内容结构不匹配）
+  return t.includes("messages") && t.includes("content");
+}
+
 async function postAnthropicWithFallbacks({ baseLabel, timeoutMs, abortSignal, attempts }) {
   const list = Array.isArray(attempts) ? attempts : [];
   if (!list.length) throw new Error("Anthropic post attempts 为空");
@@ -210,22 +238,90 @@ async function postAnthropicWithFallbacks({ baseLabel, timeoutMs, abortSignal, a
   for (let i = 0; i < list.length; i++) {
     const a = list[i] && typeof list[i] === "object" ? list[i] : {};
     const labelSuffix = normalizeString(a.labelSuffix);
-    const { url, headers, body } = buildAnthropicRequest(a.request);
-    const resp = await fetchWithRetry(
-      url,
-      { method: "POST", headers, body: JSON.stringify(body) },
-      { timeoutMs, abortSignal, label: `${baseLabel}${labelSuffix}` }
-    );
-    if (resp.ok) return resp;
+    const req0 = a.request && typeof a.request === "object" ? a.request : {};
 
-    const text = await readHttpErrorDetail(resp, { maxChars: 500 });
-    errors.push({ status: resp.status, text, labelSuffix });
+    const run = async (req, { labelSuffixExtra } = {}) => {
+      const { url, headers, body } = buildAnthropicRequest(req);
+      const resp = await fetchWithRetry(
+        url,
+        { method: "POST", headers, body: JSON.stringify(body) },
+        { timeoutMs, abortSignal, label: `${baseLabel}${labelSuffix}${normalizeString(labelSuffixExtra)}` }
+      );
+      if (resp.ok) return { ok: true, resp };
 
-    const retryable = isInvalidRequestStatusForFallback(resp.status);
+      const text = await readHttpErrorDetail(resp, { maxChars: 500 });
+      errors.push({ status: resp.status, text, labelSuffix: `${labelSuffix}${normalizeString(labelSuffixExtra)}` });
+      return { ok: false, resp, text };
+    };
+
+    const r0 = await run(req0);
+    if (r0.ok) return r0.resp;
+
+    const retryable0 = isInvalidRequestStatusForFallback(r0.resp.status);
     const hasNext = i + 1 < list.length;
-    if (retryable && hasNext) {
+    const hasSystem = typeof req0.system === "string" && req0.system.trim();
+    const alreadySystemBlocks = req0.systemAsBlocks === true;
+    const alreadyMessageBlocks = req0.messagesAsBlocks === true;
+
+    const shouldTrySystemBlocks = retryable0 && hasSystem && !alreadySystemBlocks && isSystemInvalidTypeStringError(r0.text);
+    const shouldTryMessageBlocks = retryable0 && !alreadyMessageBlocks && isMessagesContentInvalidTypeStringError(r0.text);
+
+    if (shouldTrySystemBlocks || shouldTryMessageBlocks) {
+      const parts = [];
+      const patched0 = { ...req0 };
+      if (shouldTrySystemBlocks) {
+        patched0.systemAsBlocks = true;
+        parts.push("system-blocks");
+      }
+      if (shouldTryMessageBlocks) {
+        patched0.messagesAsBlocks = true;
+        parts.push("message-blocks");
+      }
+
+      debug(
+        `${baseLabel} fallback: retry with ${parts.join("+")} (status=${r0.resp.status}, body=${truncateText(r0.text, 200)})`
+      );
+      const r1 = await run(patched0, { labelSuffixExtra: `:${parts.join("+")}` });
+      if (r1.ok) return r1.resp;
+
+      const retryable1 = isInvalidRequestStatusForFallback(r1.resp.status);
+      if (retryable1) {
+        const patched1 = { ...patched0 };
+        const parts2 = parts.slice();
+
+        const needSystemBlocks2 =
+          hasSystem && patched1.systemAsBlocks !== true && isSystemInvalidTypeStringError(r1.text);
+        const needMessageBlocks2 =
+          patched1.messagesAsBlocks !== true && isMessagesContentInvalidTypeStringError(r1.text);
+
+        if (needSystemBlocks2 || needMessageBlocks2) {
+          if (needSystemBlocks2) {
+            patched1.systemAsBlocks = true;
+            if (!parts2.includes("system-blocks")) parts2.push("system-blocks");
+          }
+          if (needMessageBlocks2) {
+            patched1.messagesAsBlocks = true;
+            if (!parts2.includes("message-blocks")) parts2.push("message-blocks");
+          }
+
+          debug(
+            `${baseLabel} fallback: retry with ${parts2.join("+")} (status=${r1.resp.status}, body=${truncateText(r1.text, 200)})`
+          );
+          const r2 = await run(patched1, { labelSuffixExtra: `:${parts2.join("+")}` });
+          if (r2.ok) return r2.resp;
+          const retryable2 = isInvalidRequestStatusForFallback(r2.resp.status);
+          if (retryable2 && hasNext) continue;
+          break;
+        }
+      }
+
+      if (retryable1 && hasNext) continue;
+      break;
+    }
+
+    if (retryable0 && hasNext) {
       const hint = normalizeString(a.retryHint);
-      debug(`${baseLabel} fallback: ${hint || "retry"} (status=${resp.status}, body=${truncateText(text, 200)})`);
+      debug(`${baseLabel} fallback: ${hint || "retry"} (status=${r0.resp.status}, body=${truncateText(r0.text, 200)})`);
       continue;
     }
     break;
